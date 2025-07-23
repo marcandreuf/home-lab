@@ -109,26 +109,50 @@ fi
 
 # Create SSH tunnel
 echo "Creating SSH tunnel: localhost:$LOCAL_PORT -> $HOST_IP:$REMOTE_PORT"
-ssh -L "$LOCAL_PORT:localhost:$REMOTE_PORT" -C -N -l "$USER" "$HOST_IP" &
+ssh -L "$LOCAL_PORT:127.0.0.1:$REMOTE_PORT" -C -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -l "$USER" "$HOST_IP" &
 SSH_PID=$!
 
-# Wait a moment for tunnel to establish
-sleep 2
+# Wait for tunnel to establish with better checking
+echo "Waiting for SSH tunnel to establish..."
+TUNNEL_READY=false
+for i in {1..10}; do
+    sleep 1
+    
+    # Check if SSH process is still running
+    if ! kill -0 "$SSH_PID" 2>/dev/null; then
+        echo "Error: SSH tunnel process died (attempt $i/10)"
+        break
+    fi
+    
+    # Test if the tunnel is working
+    if nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
+        echo "SSH tunnel established successfully (attempt $i/10)"
+        TUNNEL_READY=true
+        break
+    fi
+    
+    echo "Tunnel not ready yet (attempt $i/10)..."
+done
 
-# Check if tunnel is working
-if ! kill -0 "$SSH_PID" 2>/dev/null; then
-    echo "Error: SSH tunnel failed to establish"
-    exit 1
-fi
-
-# Test the tunnel
-if ! nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
-    echo "Error: Cannot connect to local port $LOCAL_PORT"
+# Final check
+if ! $TUNNEL_READY; then
+    if kill -0 "$SSH_PID" 2>/dev/null; then
+        echo "Error: SSH tunnel established but cannot connect to local port $LOCAL_PORT"
+        echo "This might indicate a firewall or network issue"
+    else
+        echo "Error: SSH tunnel failed to establish"
+    fi
     exit 1
 fi
 
 echo "SSH tunnel established successfully (PID: $SSH_PID)"
 echo "Starting VNC viewer..."
+
+# Additional debug: verify the tunnel one more time before starting VNC viewer
+echo "Final tunnel verification..."
+if ! nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
+    echo "Warning: Final tunnel check failed, but proceeding anyway"
+fi
 
 # Start VNC viewer
 if command -v vncviewer >/dev/null 2>&1; then
