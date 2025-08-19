@@ -25,11 +25,178 @@ show_usage() {
 # Function to cleanup on exit
 cleanup() {
     echo "Cleaning up..."
+    
+    # Kill SSH tunnel
     if [[ -n "$SSH_PID" ]] && kill -0 "$SSH_PID" 2>/dev/null; then
         echo "Killing SSH tunnel (PID: $SSH_PID)"
-        kill "$SSH_PID"
+        kill "$SSH_PID" 2>/dev/null
+        sleep 2
+        # Force kill if still running
+        if kill -0 "$SSH_PID" 2>/dev/null; then
+            kill -9 "$SSH_PID" 2>/dev/null
+        fi
     fi
+    
+    # Kill any remaining SSH tunnels on this port
+    cleanup_local_port
+    
     exit 0
+}
+
+# Function to clean up local port
+cleanup_local_port() {
+    echo "Checking for processes using local port $LOCAL_PORT..."
+    local pids=$(lsof -t -i:"$LOCAL_PORT" 2>/dev/null)
+    if [[ -n "$pids" ]]; then
+        echo "Killing processes on port $LOCAL_PORT: $pids"
+        echo "$pids" | xargs kill -TERM 2>/dev/null || true
+        sleep 2
+        # Force kill any remaining
+        local remaining_pids=$(lsof -t -i:"$LOCAL_PORT" 2>/dev/null)
+        if [[ -n "$remaining_pids" ]]; then
+            echo "Force killing remaining processes: $remaining_pids"
+            echo "$remaining_pids" | xargs kill -9 2>/dev/null || true
+        fi
+    fi
+}
+
+# Function to restart VNC server
+restart_vnc_server() {
+    echo "Restarting VNC server on display :$VNC_DISPLAY..."
+    
+    # Kill existing VNC server
+    ssh "$USER@$HOST_IP" "vncserver -kill :$VNC_DISPLAY" 2>/dev/null || true
+    sleep 2
+    
+    # Force kill if still running
+    ssh "$USER@$HOST_IP" "pkill -f 'Xvnc.*:$VNC_DISPLAY'" 2>/dev/null || true
+    sleep 1
+    
+    # Start VNC server
+    echo "Starting fresh VNC server..."
+    VNC_START_OUTPUT=$(ssh -t "$USER@$HOST_IP" "vncserver :$VNC_DISPLAY -localhost no" 2>&1)
+    
+    if [[ $? -eq 0 ]]; then
+        echo "VNC server restarted successfully"
+        return 0
+    else
+        echo "Error restarting VNC server:"
+        echo "$VNC_START_OUTPUT"
+        return 1
+    fi
+}
+
+# Function to handle VNC connection with retry logic
+connect_vnc_with_retry() {
+    local max_attempts=3
+    local attempt=1
+    
+    while [[ $attempt -le $max_attempts ]]; do
+        echo "VNC connection attempt $attempt/$max_attempts"
+        
+        # Verify tunnel is still working
+        if ! nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
+            echo "SSH tunnel is down, re-establishing..."
+            if ! establish_ssh_tunnel; then
+                echo "Failed to re-establish SSH tunnel"
+                return 1
+            fi
+        fi
+        
+        # Start VNC viewer
+        if command -v vncviewer >/dev/null 2>&1; then
+            echo "Starting VNC viewer on localhost::$LOCAL_PORT"
+            vncviewer "localhost::$LOCAL_PORT" 2>/dev/null
+            vnc_exit_code=$?
+            
+            if [[ $vnc_exit_code -eq 0 ]]; then
+                echo "VNC session ended normally"
+                return 0
+            fi
+            
+            echo "VNC viewer exited with code: $vnc_exit_code"
+            
+            # If this isn't the last attempt, ask user what to do
+            if [[ $attempt -lt $max_attempts ]]; then
+                echo ""
+                echo "VNC connection failed. Options:"
+                echo "1) Retry connection (attempt $((attempt + 1))/$max_attempts)"
+                echo "2) Restart VNC server and retry"
+                echo "3) Exit"
+                echo ""
+                read -p "Choose option (1-3): " -n 1 -r choice
+                echo ""
+                
+                case $choice in
+                    1)
+                        echo "Retrying connection..."
+                        ;;
+                    2)
+                        if restart_vnc_server; then
+                            echo "VNC server restarted, retrying connection..."
+                        else
+                            echo "Failed to restart VNC server"
+                            return 1
+                        fi
+                        ;;
+                    3|*)
+                        echo "Exiting..."
+                        return 1
+                        ;;
+                esac
+            fi
+        else
+            echo "Error: vncviewer not found. Please install a VNC client."
+            return 1
+        fi
+        
+        ((attempt++))
+        sleep 2
+    done
+    
+    echo "All VNC connection attempts failed"
+    return 1
+}
+
+# Function to establish SSH tunnel
+establish_ssh_tunnel() {
+    # Clean up any existing connections on this port first
+    cleanup_local_port
+    
+    # Create SSH tunnel
+    echo "Creating SSH tunnel: localhost:$LOCAL_PORT -> $HOST_IP:$REMOTE_PORT"
+    ssh -L "$LOCAL_PORT:127.0.0.1:$REMOTE_PORT" -C -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -l "$USER" "$HOST_IP" &
+    SSH_PID=$!
+    
+    # Wait for tunnel to establish
+    echo "Waiting for SSH tunnel to establish..."
+    local tunnel_ready=false
+    for i in {1..15}; do
+        sleep 1
+        
+        # Check if SSH process is still running
+        if ! kill -0 "$SSH_PID" 2>/dev/null; then
+            echo "Error: SSH tunnel process died (attempt $i/15)"
+            return 1
+        fi
+        
+        # Test if the tunnel is working
+        if nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
+            echo "SSH tunnel established successfully (attempt $i/15)"
+            tunnel_ready=true
+            break
+        fi
+        
+        echo "Tunnel not ready yet (attempt $i/15)..."
+    done
+    
+    if ! $tunnel_ready; then
+        echo "Error: SSH tunnel failed to establish"
+        return 1
+    fi
+    
+    echo "SSH tunnel established successfully (PID: $SSH_PID)"
+    return 0
 }
 
 # Set up trap for cleanup
@@ -62,6 +229,9 @@ fi
 echo "Connecting to $HOST_IP as $USER"
 echo "Using local port: $LOCAL_PORT, remote port: $REMOTE_PORT, VNC display: $VNC_DISPLAY"
 
+# Clean up any existing processes using our local port
+cleanup_local_port
+
 # Test SSH connection first
 echo "Testing SSH connection..."
 if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$USER@$HOST_IP" 'echo "SSH connection successful"' 2>/dev/null; then
@@ -76,20 +246,22 @@ VNC_CHECK_OUTPUT=$(ssh -o ConnectTimeout=10 "$USER@$HOST_IP" "vncserver -list 2>
 if echo "$VNC_CHECK_OUTPUT" | grep -q ":$VNC_DISPLAY[[:space:]]"; then
     echo "VNC server already running on display :$VNC_DISPLAY"
     echo "$VNC_CHECK_OUTPUT" | grep ":$VNC_DISPLAY"
-    echo "Proceeding with connection..."
+    
+    # Ask if user wants to restart the VNC server to clear any authentication issues
+    echo ""
+    read -p "VNC server is running. Restart it to clear any auth issues? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if ! restart_vnc_server; then
+            exit 1
+        fi
+    else
+        echo "Proceeding with existing VNC server..."
+    fi
 else
     echo "Starting VNC server on display :$VNC_DISPLAY..."
-    VNC_START_OUTPUT=$(ssh -t "$USER@$HOST_IP" "vncserver :$VNC_DISPLAY" 2>&1)
-    
-    # Check if it failed to start (but ignore "already running" messages)
-    if [[ $? -ne 0 ]] && [[ ! "$VNC_START_OUTPUT" =~ "already running" ]]; then
-        echo "Error: Failed to start VNC server"
-        echo "$VNC_START_OUTPUT"
+    if ! restart_vnc_server; then
         exit 1
-    elif [[ "$VNC_START_OUTPUT" =~ "already running" ]]; then
-        echo "VNC server was already running on display :$VNC_DISPLAY"
-    else
-        echo "VNC server started successfully"
     fi
 fi
 
@@ -97,69 +269,13 @@ fi
 echo "Current VNC servers:"
 ssh "$USER@$HOST_IP" 'vncserver -list'
 
-# Check if local port is already in use
-if lsof -Pi ":$LOCAL_PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo "Warning: Port $LOCAL_PORT is already in use"
-    read -p "Do you want to continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-
-# Create SSH tunnel
-echo "Creating SSH tunnel: localhost:$LOCAL_PORT -> $HOST_IP:$REMOTE_PORT"
-ssh -L "$LOCAL_PORT:127.0.0.1:$REMOTE_PORT" -C -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -l "$USER" "$HOST_IP" &
-SSH_PID=$!
-
-# Wait for tunnel to establish with better checking
-echo "Waiting for SSH tunnel to establish..."
-TUNNEL_READY=false
-for i in {1..10}; do
-    sleep 1
-    
-    # Check if SSH process is still running
-    if ! kill -0 "$SSH_PID" 2>/dev/null; then
-        echo "Error: SSH tunnel process died (attempt $i/10)"
-        break
-    fi
-    
-    # Test if the tunnel is working
-    if nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
-        echo "SSH tunnel established successfully (attempt $i/10)"
-        TUNNEL_READY=true
-        break
-    fi
-    
-    echo "Tunnel not ready yet (attempt $i/10)..."
-done
-
-# Final check
-if ! $TUNNEL_READY; then
-    if kill -0 "$SSH_PID" 2>/dev/null; then
-        echo "Error: SSH tunnel established but cannot connect to local port $LOCAL_PORT"
-        echo "This might indicate a firewall or network issue"
-    else
-        echo "Error: SSH tunnel failed to establish"
-    fi
+# Establish SSH tunnel
+if ! establish_ssh_tunnel; then
     exit 1
 fi
 
-echo "SSH tunnel established successfully (PID: $SSH_PID)"
-echo "Starting VNC viewer..."
-
-# Additional debug: verify the tunnel one more time before starting VNC viewer
-echo "Final tunnel verification..."
-if ! nc -z localhost "$LOCAL_PORT" 2>/dev/null; then
-    echo "Warning: Final tunnel check failed, but proceeding anyway"
-fi
-
-# Start VNC viewer
-if command -v vncviewer >/dev/null 2>&1; then
-    vncviewer "localhost::$LOCAL_PORT"
-else
-    echo "Error: vncviewer not found. Please install a VNC client."
-    exit 1
-fi
+# Connect to VNC with retry logic
+echo "Starting VNC connection with retry capability..."
+connect_vnc_with_retry
 
 # Cleanup will be handled by the trap
