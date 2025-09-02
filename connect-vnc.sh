@@ -199,8 +199,7 @@ establish_ssh_tunnel() {
     return 0
 }
 
-# Set up trap for cleanup
-trap cleanup EXIT INT TERM
+## Removed automatic cleanup trap to keep remote session and apps alive
 
 # Parse parameters
 if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
