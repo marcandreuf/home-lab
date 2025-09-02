@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# connect-vnc.sh: Connect to a remote VNC session via SSH tunnel
+#
+# Usage:
+#   ./connect-vnc.sh <HOST_IP> [USER] [LOCAL_PORT] [REMOTE_PORT] [VNC_DISPLAY] [--restart]
+#
+# Parameters:
+#   HOST_IP      - Remote host IP address (required)
+#   USER         - SSH username (default: ubdesk1)
+#   LOCAL_PORT   - Local port for tunnel (default: 59003)
+#   REMOTE_PORT  - Remote VNC port (default: 5901)
+#   VNC_DISPLAY  - VNC display number (default: 1)
+#   --restart    - (Optional) Restart the VNC server on the remote host. WARNING: This will kill all running apps in the VNC session!
+#
+# Examples:
+#   ./connect-vnc.sh 192.168.1.100
+#   ./connect-vnc.sh 192.168.1.100 myuser 59004 5902 2
+#   ./connect-vnc.sh 192.168.1.100 myuser 59003 5901 1 --restart
+#
+# Notes:
+# - By default, the script will connect to an existing VNC session if available, preserving all running apps.
+# - Use --restart only if you need to reset the VNC session (e.g., authentication issues). This will terminate all running processes in the session.
+
 # Default values
 DEFAULT_USER="ubdesk1"
 DEFAULT_LOCAL_PORT=59003
@@ -201,9 +223,18 @@ establish_ssh_tunnel() {
 
 ## Removed automatic cleanup trap to keep remote session and apps alive
 
-# Parse parameters
+
+# Parse parameters and flags
+RESTART_VNC=false
+for arg in "$@"; do
+    if [[ "$arg" == "--restart" ]]; then
+        RESTART_VNC=true
+    fi
+done
+
 if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     show_usage
+    echo "  --restart     - Restart VNC server (kills running session and apps!)"
     exit 1
 fi
 
@@ -238,28 +269,31 @@ if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$USER@$HOST_IP" 'echo "SSH conne
     exit 1
 fi
 
+
+
 # Check if VNC server is already running on the specified display
 echo "Checking VNC server status..."
 VNC_CHECK_OUTPUT=$(ssh -o ConnectTimeout=10 "$USER@$HOST_IP" "vncserver -list 2>/dev/null" || echo "")
 
-if echo "$VNC_CHECK_OUTPUT" | grep -q ":$VNC_DISPLAY[[:space:]]"; then
+if $RESTART_VNC; then
+    echo "Restarting VNC server as requested by --restart flag. This will kill running apps!"
+    if ! restart_vnc_server; then
+        exit 1
+    fi
+elif echo "$VNC_CHECK_OUTPUT" | grep -q ":$VNC_DISPLAY[[:space:]]"; then
     echo "VNC server already running on display :$VNC_DISPLAY"
     echo "$VNC_CHECK_OUTPUT" | grep ":$VNC_DISPLAY"
-    
-    # Ask if user wants to restart the VNC server to clear any authentication issues
-    echo ""
-    read -p "VNC server is running. Restart it to clear any auth issues? (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if ! restart_vnc_server; then
-            exit 1
-        fi
-    else
-        echo "Proceeding with existing VNC server..."
-    fi
+    echo "Proceeding with existing VNC server..."
 else
-    echo "Starting VNC server on display :$VNC_DISPLAY..."
-    if ! restart_vnc_server; then
+    echo "VNC server not detected by vncserver -list. Attempting to start it..."
+    VNC_START_OUTPUT=$(ssh -t "$USER@$HOST_IP" "vncserver :$VNC_DISPLAY -localhost no" 2>&1)
+    if echo "$VNC_START_OUTPUT" | grep -q "already running"; then
+        echo "VNC server is already running for display :$VNC_DISPLAY. Proceeding to connect."
+    elif echo "$VNC_START_OUTPUT" | grep -q "New '"; then
+        echo "VNC server started successfully."
+    else
+        echo "Failed to start VNC server. Output:"
+        echo "$VNC_START_OUTPUT"
         exit 1
     fi
 fi
