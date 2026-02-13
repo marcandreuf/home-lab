@@ -1,4 +1,6 @@
-# Maximizing Productivity with AI-Driven Home Lab Automation
+# AI-Driven Parallel Dev Infrastructure at Home
+
+Secure VM isolation, remote access anywhere, and parallel project execution with convenient Wake-on-LAN startup
 
 ## Introduction
 
@@ -14,7 +16,7 @@ In practice, that means I can let Claude Code work on Project 1 while I test, re
 
 ## Seamless Remote Connectivity with Zerotier
 
-To ensure I can work from anywhere and at any time, I use Zerotier to connect remotely to all my VMs. That includes working from other offices or cafés while I rely primarily on my home lab resources. Zerotier provides secure, flexible networking, allowing me to access my agentic development environments no matter where I am. This means I can always reconnect to my distributed dev agents, check the status of each long-running task, and take action on the next steps without interruption, well, except when I sleep.
+To ensure I can work from anywhere and at any time, I use Zerotier to connect remotely to all my VMs. That includes working from other offices or cafés while I rely primarily on my home lab resources. Zerotier provides secure, flexible networking, allowing me to access my agentic development environments no matter where I am. From the Proxmox UI, I can start and stop individual VMs—and even shut down the Proxmox host itself—whenever I need. This means I can always reconnect to my distributed dev agents, check the status of each long-running task, and take action on the next steps without interruption, well, except when I sleep.
 
 This is also an asynchronous setup: I can connect or disconnect via VNC at any time while Claude Code instances keep working and tests continue running. That flexibility gives me the freedom to drop in, review progress, and move on—without being tied to a single machine or schedule.
 
@@ -54,7 +56,7 @@ This agentic, parallelized workflow is ideal for modern dev engineers who want t
 
 ## Wake-on-LAN for Proxmox via Raspberry Pi 4B
 
-My latest addition is a Raspberry Pi 4B that handles Wake-on-LAN for the Proxmox host using `wol-proxmox.sh`. This lets me power on the home lab server remotely from anywhere with a single SSH command like `ssh ubuntu@192.168.192.21 './wol-proxmox.sh'`. Because all devices live on the same Zerotier network, it’s a straightforward setup—no port forwarding, no router changes, and none of the usual networking headaches. It’s a small upgrade that makes spinning up the lab on-demand fast and reliable.
+My latest addition is a Raspberry Pi 4B that handles Wake-on-LAN for the Proxmox host using `wol-proxmox.sh`. It’s a convenience trick that lets me shut the lab down at night, on weekends, or during holidays, then bring it back up from anywhere with a single SSH command like `ssh ubuntu@192.168.192.21 './wol-proxmox.sh'`. Because all devices live on the same Zerotier network, it’s a straightforward setup—no port forwarding, no router changes, and none of the usual networking headaches. It’s a small upgrade that makes spinning up the lab on-demand fast and reliable.
 
 ## Sharing My Scripts: VNC Connections and Wake-on-LAN
 
