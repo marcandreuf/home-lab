@@ -7,23 +7,27 @@
 #
 # Parameters:
 #   HOST_IP      - Remote host IP address (required)
-#   USER         - SSH username (default: ubdesk1)
+#   USER         - SSH username (default: from REMOTE_USER env var or 'user')
 #   LOCAL_PORT   - Local port for tunnel (default: 59003)
 #   REMOTE_PORT  - Remote VNC port (default: 5901)
 #   VNC_DISPLAY  - VNC display number (default: 1)
 #   --restart    - (Optional) Restart the VNC server on the remote host. WARNING: This will kill all running apps in the VNC session!
 #
+# Environment Variables:
+#   REMOTE_USER  - Override default SSH username (optional)
+#
 # Examples:
 #   ./connect-vnc.sh 192.168.1.100
 #   ./connect-vnc.sh 192.168.1.100 myuser 59004 5902 2
 #   ./connect-vnc.sh 192.168.1.100 myuser 59003 5901 1 --restart
+#   REMOTE_USER=myuser ./connect-vnc.sh 192.168.1.100
 #
 # Notes:
 # - By default, the script will connect to an existing VNC session if available, preserving all running apps.
 # - Use --restart only if you need to reset the VNC session (e.g., authentication issues). This will terminate all running processes in the session.
 
 # Default values
-DEFAULT_USER="ubdesk1"
+DEFAULT_USER="${REMOTE_USER:-user}"
 DEFAULT_LOCAL_PORT=59003
 DEFAULT_REMOTE_PORT=5901
 DEFAULT_VNC_DISPLAY=1
