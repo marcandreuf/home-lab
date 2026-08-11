@@ -3,10 +3,10 @@
 # morning-terminals.sh - Open the morning workspace as positioned terminals
 #
 # Usage:
-#   ./morning-terminals.sh PROJECT [BANNER...]   Open the terminals (default)
-#   ./morning-terminals.sh --install PROJECT     Install missing requirements, then check
-#   ./morning-terminals.sh --check PROJECT       Report requirement status, install nothing
-#   ./morning-terminals.sh --help                Show usage
+#   ./morning-terminals.sh [PROJECT] [BANNER...]   Open the terminals (default)
+#   ./morning-terminals.sh --install [PROJECT]     Install missing requirements, then check
+#   ./morning-terminals.sh --check [PROJECT]       Report requirement status, install nothing
+#   ./morning-terminals.sh --help                  Show usage
 #
 # Opens one gnome-terminal window per tool at a fixed size and screen position,
 # then raises the Claude Code window so it ends up on top.
@@ -14,9 +14,11 @@
 # PROJECT selects the directory Claude Code starts in, so the same script works
 # on every VM. A bare name is looked up under ~/projects (foo -> ~/projects/foo);
 # anything containing a slash is used as the path itself, absolute or relative
-# to $HOME (work/foo -> ~/work/foo). BANNER is the text of the banner window and
-# defaults to the project name in upper case, so pass it when you want different
-# wording or spacing.
+# to $HOME (work/foo -> ~/work/foo). With no PROJECT the window opens in
+# ~/projects itself, which is the right starting point when the VM has several
+# and you have not picked one yet. BANNER is the text of the banner window and
+# defaults to the directory name in upper case, so pass it when you want
+# different wording or spacing.
 #
 #
 # REQUIREMENTS
@@ -60,31 +62,39 @@
 
 APT_PACKAGES=(xdotool gnome-terminal)
 
+# Where bare project names are looked up, and the fallback when no project is
+# given at all.
+PROJECTS_DIR="$HOME/projects"
+
 # Set by resolve_project().
 PROJECT_DIR=
 PROJECT_NAME=
 BANNER_TEXT=
 
 usage() {
+  local default_banner="${PROJECTS_DIR##*/}"
+  default_banner="${default_banner^^}"
+
   cat <<EOF
 morning-terminals.sh - Open the morning workspace as positioned terminals
 
 Usage:
-  $0 PROJECT [BANNER...]   Open the terminals (default)
-  $0 --install PROJECT     Install missing requirements, then check
-  $0 --check PROJECT       Report requirement status, install nothing
-  $0 --help                Show usage
+  $0 [PROJECT] [BANNER...]   Open the terminals (default)
+  $0 --install [PROJECT]     Install missing requirements, then check
+  $0 --check [PROJECT]       Report requirement status, install nothing
+  $0 --help                  Show usage
 
-PROJECT is the directory Claude Code starts in. A bare name resolves under
-~/projects; a value with a slash is the path itself, absolute or relative
-to \$HOME.
-BANNER is the banner window's text (default: the project name upper-cased).
+PROJECT is the directory Claude Code starts in, defaulting to $PROJECTS_DIR
+when omitted. A bare name resolves under $PROJECTS_DIR; a value with a slash
+is the path itself, absolute or relative to \$HOME.
+BANNER is the banner window's text (default: the directory name upper-cased).
 
 Examples:
-  $0 foo                  ~/projects/foo, banner "FOO"
-  $0 foo 'FOO BAR'        ~/projects/foo, banner "FOO BAR"
-  $0 work/foo             ~/work/foo
-  $0 /srv/foo             /srv/foo
+  $0                        $PROJECTS_DIR, banner "$default_banner"
+  $0 foo                    $PROJECTS_DIR/foo, banner "FOO"
+  $0 foo 'FOO BAR'          $PROJECTS_DIR/foo, banner "FOO BAR"
+  $0 work/foo               ~/work/foo
+  $0 /srv/foo               /srv/foo
 
 See the comment header in this file for the full requirements list.
 EOF
@@ -95,19 +105,13 @@ EOF
 # contain spaces without the caller quoting it.
 resolve_project() {
   local project="${1:-}"
-
-  if [[ -z "$project" ]]; then
-    echo "missing PROJECT argument" >&2
-    echo >&2
-    usage >&2
-    exit 1
-  fi
-  shift
+  shift || true
 
   case "$project" in
+    "")  PROJECT_DIR="$PROJECTS_DIR" ;;
     /*)  PROJECT_DIR="$project" ;;
     */*) PROJECT_DIR="$HOME/$project" ;;
-    *)   PROJECT_DIR="$HOME/projects/$project" ;;
+    *)   PROJECT_DIR="$PROJECTS_DIR/$project" ;;
   esac
 
   PROJECT_DIR="${PROJECT_DIR%/}"
