@@ -13,7 +13,7 @@ These scripts help me:
 
 - banner.sh – helper script for displaying a banner or status message
 - connect-vnc.sh – connects to a VNC session
-- morning-terminals.sh – opens the morning workspace as positioned terminal windows (X11 only; run with --install on a new machine)
+- morning-terminals.sh – opens the morning workspace as positioned terminal windows; takes the project directory to open Claude Code in, e.g. `./morning-terminals.sh foo` for `~/projects/foo` (X11 only; run with --install on a new machine)
 - restart-program.sh – restarts a program or service
 - wol-proxmox.sh – sends a Wake-on-LAN request for a Proxmox host
 - zerotier-reset-identity.sh – resets a ZeroTier identity when needed

@@ -3,13 +3,20 @@
 # morning-terminals.sh - Open the morning workspace as positioned terminals
 #
 # Usage:
-#   ./morning-terminals.sh              Open the terminals (default)
-#   ./morning-terminals.sh --install    Install missing requirements, then check
-#   ./morning-terminals.sh --check      Report requirement status, install nothing
-#   ./morning-terminals.sh --help       Show usage
+#   ./morning-terminals.sh PROJECT [BANNER...]   Open the terminals (default)
+#   ./morning-terminals.sh --install PROJECT     Install missing requirements, then check
+#   ./morning-terminals.sh --check PROJECT       Report requirement status, install nothing
+#   ./morning-terminals.sh --help                Show usage
 #
 # Opens one gnome-terminal window per tool at a fixed size and screen position,
 # then raises the Claude Code window so it ends up on top.
+#
+# PROJECT selects the directory Claude Code starts in, so the same script works
+# on every VM. A bare name is looked up under ~/projects (foo -> ~/projects/foo);
+# anything containing a slash is used as the path itself, absolute or relative
+# to $HOME (work/foo -> ~/work/foo). BANNER is the text of the banner window and
+# defaults to the project name in upper case, so pass it when you want different
+# wording or spacing.
 #
 #
 # REQUIREMENTS
@@ -36,7 +43,7 @@
 #       Not packaged in apt; install from https://github.com/jesseduffield/lazydocker
 #
 #   Paths expected under $HOME
-#       ~/projects/ajrubi          working dir for the Claude Code window
+#       the PROJECT directory     working dir for the Claude Code window
 #       ~/projects/home-lab/banner.sh   run by the Banner window
 #       The banner is launched by a path relative to the terminal's starting
 #       directory, which is $HOME.
@@ -53,18 +60,64 @@
 
 APT_PACKAGES=(xdotool gnome-terminal)
 
+# Set by resolve_project().
+PROJECT_DIR=
+PROJECT_NAME=
+BANNER_TEXT=
+
 usage() {
   cat <<EOF
 morning-terminals.sh - Open the morning workspace as positioned terminals
 
 Usage:
-  $0              Open the terminals (default)
-  $0 --install    Install missing requirements, then check
-  $0 --check      Report requirement status, install nothing
-  $0 --help       Show usage
+  $0 PROJECT [BANNER...]   Open the terminals (default)
+  $0 --install PROJECT     Install missing requirements, then check
+  $0 --check PROJECT       Report requirement status, install nothing
+  $0 --help                Show usage
+
+PROJECT is the directory Claude Code starts in. A bare name resolves under
+~/projects; a value with a slash is the path itself, absolute or relative
+to \$HOME.
+BANNER is the banner window's text (default: the project name upper-cased).
+
+Examples:
+  $0 foo                  ~/projects/foo, banner "FOO"
+  $0 foo 'FOO BAR'        ~/projects/foo, banner "FOO BAR"
+  $0 work/foo             ~/work/foo
+  $0 /srv/foo             /srv/foo
 
 See the comment header in this file for the full requirements list.
 EOF
+}
+
+# Turn the PROJECT argument into a directory, a name to match windows on, and
+# the banner text. Remaining arguments are the banner text verbatim, so it can
+# contain spaces without the caller quoting it.
+resolve_project() {
+  local project="${1:-}"
+
+  if [[ -z "$project" ]]; then
+    echo "missing PROJECT argument" >&2
+    echo >&2
+    usage >&2
+    exit 1
+  fi
+  shift
+
+  case "$project" in
+    /*)  PROJECT_DIR="$project" ;;
+    */*) PROJECT_DIR="$HOME/$project" ;;
+    *)   PROJECT_DIR="$HOME/projects/$project" ;;
+  esac
+
+  PROJECT_DIR="${PROJECT_DIR%/}"
+  PROJECT_NAME="${PROJECT_DIR##*/}"
+
+  if [[ $# -gt 0 ]]; then
+    BANNER_TEXT="$*"
+  else
+    BANNER_TEXT="${PROJECT_NAME^^}"
+  fi
 }
 
 # Print the session type, falling back to logind when the variable is not set
@@ -109,7 +162,7 @@ check_requirements() {
   fi
 
   local path
-  for path in "$HOME/projects/ajrubi" "$HOME/projects/home-lab/banner.sh"; do
+  for path in "$PROJECT_DIR" "$HOME/projects/home-lab/banner.sh"; do
     if [[ -e "$path" ]]; then
       echo "  ok       $path"
     else
@@ -199,21 +252,34 @@ open_terminals() {
     exit 1
   fi
 
+  if [[ ! -d "$PROJECT_DIR" ]]; then
+    echo "$PROJECT_DIR does not exist -- the Claude Code window will stay in \$HOME" >&2
+  fi
+
   # Lazydocker
   launch "88x47+0+0" "LazyDocker" "lazydocker"
 
   # Banner
-  launch "35x7+0+1060" "Banner" "./projects/home-lab/banner.sh 'AJ RUBI'"
+  launch "35x7+0+1060" "Banner" \
+    "./projects/home-lab/banner.sh $(printf '%q' "$BANNER_TEXT")"
 
   # Claude Code -- launched last and raised, so it ends up on top
-  launch "113x57+400+0" "CC" "cd; cd projects/ajrubi"
-  focus_window "ajrubi"
+  launch "113x57+400+0" "CC" "cd $(printf '%q' "$PROJECT_DIR") && claude"
+  focus_window "$PROJECT_NAME"
 }
 
+action=open
 case "${1:-}" in
-  --install) install_requirements ;;
-  --check)   echo "requirements:"; check_requirements ;;
-  --help|-h) usage ;;
-  "")        open_terminals ;;
-  *)         echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
+  --install) action=install; shift ;;
+  --check)   action=check;   shift ;;
+  --help|-h) usage; exit 0 ;;
+  -*)        echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
+esac
+
+resolve_project "$@"
+
+case "$action" in
+  install) install_requirements ;;
+  check)   echo "requirements:"; check_requirements ;;
+  open)    open_terminals ;;
 esac
