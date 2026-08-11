@@ -3,7 +3,8 @@
 # morning-terminals.sh - Open the morning workspace as positioned terminals
 #
 # Usage:
-#   ./morning-terminals.sh [PROJECT] [BANNER...]   Open the terminals (default)
+#   ./morning-terminals.sh [--banner TEXT] [PROJECT] [BANNER...]
+#                                                  Open the terminals (default)
 #   ./morning-terminals.sh --install [PROJECT]     Install missing requirements, then check
 #   ./morning-terminals.sh --check [PROJECT]       Report requirement status, install nothing
 #   ./morning-terminals.sh --help                  Show usage
@@ -18,7 +19,10 @@
 # ~/projects itself, which is the right starting point when the VM has several
 # and you have not picked one yet. BANNER is the text of the banner window and
 # defaults to the directory name in upper case, so pass it when you want
-# different wording or spacing.
+# different wording or spacing. Because the positional BANNER only follows a
+# PROJECT, use --banner TEXT to set it while keeping the default project
+# directory -- that is the case where the directory name ("projects") says
+# nothing about which VM you are looking at.
 #
 #
 # REQUIREMENTS
@@ -71,6 +75,10 @@ PROJECT_DIR=
 PROJECT_NAME=
 BANNER_TEXT=
 
+# Set by the option loop at the bottom; consumed by resolve_project().
+banner_override=
+banner_set=0
+
 usage() {
   local default_banner="${PROJECTS_DIR##*/}"
   default_banner="${default_banner^^}"
@@ -79,7 +87,8 @@ usage() {
 morning-terminals.sh - Open the morning workspace as positioned terminals
 
 Usage:
-  $0 [PROJECT] [BANNER...]   Open the terminals (default)
+  $0 [--banner TEXT] [PROJECT] [BANNER...]
+                             Open the terminals (default)
   $0 --install [PROJECT]     Install missing requirements, then check
   $0 --check [PROJECT]       Report requirement status, install nothing
   $0 --help                  Show usage
@@ -88,9 +97,12 @@ PROJECT is the directory Claude Code starts in, defaulting to $PROJECTS_DIR
 when omitted. A bare name resolves under $PROJECTS_DIR; a value with a slash
 is the path itself, absolute or relative to \$HOME.
 BANNER is the banner window's text (default: the directory name upper-cased).
+--banner TEXT sets the same thing without a PROJECT in front of it, which is
+the only way to word the banner while keeping the default project directory.
 
 Examples:
   $0                        $PROJECTS_DIR, banner "$default_banner"
+  $0 --banner Memship       $PROJECTS_DIR, banner "Memship"
   $0 foo                    $PROJECTS_DIR/foo, banner "FOO"
   $0 foo 'FOO BAR'          $PROJECTS_DIR/foo, banner "FOO BAR"
   $0 work/foo               ~/work/foo
@@ -102,7 +114,8 @@ EOF
 
 # Turn the PROJECT argument into a directory, a name to match windows on, and
 # the banner text. Remaining arguments are the banner text verbatim, so it can
-# contain spaces without the caller quoting it.
+# contain spaces without the caller quoting it. --banner wins over both, so it
+# can override the default without naming a project.
 resolve_project() {
   local project="${1:-}"
   shift || true
@@ -117,7 +130,9 @@ resolve_project() {
   PROJECT_DIR="${PROJECT_DIR%/}"
   PROJECT_NAME="${PROJECT_DIR##*/}"
 
-  if [[ $# -gt 0 ]]; then
+  if [[ $banner_set -eq 1 ]]; then
+    BANNER_TEXT="$banner_override"
+  elif [[ $# -gt 0 ]]; then
     BANNER_TEXT="$*"
   else
     BANNER_TEXT="${PROJECT_NAME^^}"
@@ -272,13 +287,25 @@ open_terminals() {
   focus_window "$PROJECT_NAME"
 }
 
+# A loop rather than a single case, so --banner can be combined with the other
+# options and does not have to come first.
 action=open
-case "${1:-}" in
-  --install) action=install; shift ;;
-  --check)   action=check;   shift ;;
-  --help|-h) usage; exit 0 ;;
-  -*)        echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
-esac
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install)  action=install; shift ;;
+    --check)    action=check;   shift ;;
+    --banner|-b)
+      if [[ $# -lt 2 ]]; then
+        echo "$1 needs a value" >&2; echo; usage; exit 1
+      fi
+      banner_override="$2"; banner_set=1; shift 2 ;;
+    --banner=*) banner_override="${1#--banner=}"; banner_set=1; shift ;;
+    --help|-h)  usage; exit 0 ;;
+    --)         shift; break ;;
+    -*)         echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
+    *)          break ;;
+  esac
+done
 
 resolve_project "$@"
 
