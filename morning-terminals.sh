@@ -206,7 +206,7 @@ open_terminals() {
   launch "35x7+0+1060" "Banner" "./projects/home-lab/banner.sh 'AJ RUBI'"
 
   # Claude Code -- launched last and raised, so it ends up on top
-  launch "136x62+400+0" "CC" "cd; cd projects/ajrubi"
+  launch "113x57+400+0" "CC" "cd; cd projects/ajrubi"
   focus_window "ajrubi"
 }
 
