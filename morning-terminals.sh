@@ -44,9 +44,14 @@
 #   gnome-terminal (required)                         --install handles this
 #       Default on Ubuntu Desktop, but NOT on Xubuntu (xfce4-terminal) or
 #       Kubuntu (konsole).
+#   toilet (required by banner.sh, not installed by default)
+#                                                     --install handles this
+#       Without it the Banner window prints an error and exits.
 #
 #   lazydocker (optional, only for the LazyDocker window)
-#       Not packaged in apt; install from https://github.com/jesseduffield/lazydocker
+#       Not packaged in apt, so --install downloads the release binary from
+#       https://github.com/jesseduffield/lazydocker into ~/.local/bin, which
+#       has to be on your PATH for the window to find it.
 #
 #   Paths expected under $HOME
 #       the PROJECT directory     working dir for the Claude Code window
@@ -64,7 +69,11 @@
 #       tput cols; tput lines        (in a maximized terminal)
 #       xdotool getactivewindow getwindowgeometry --shell
 
-APT_PACKAGES=(xdotool gnome-terminal)
+APT_PACKAGES=(xdotool gnome-terminal toilet)
+
+# lazydocker ships as a GitHub release tarball rather than an apt package.
+LAZYDOCKER_REPO="jesseduffield/lazydocker"
+LAZYDOCKER_BIN_DIR="$HOME/.local/bin"
 
 # Where bare project names are looked up, and the fallback when no project is
 # given at all.
@@ -177,7 +186,7 @@ check_requirements() {
     echo "  ok       lazydocker"
   else
     echo "  absent   lazydocker (optional; that window will exit immediately)"
-    echo "           https://github.com/jesseduffield/lazydocker"
+    echo "           run: $0 --install"
   fi
 
   local path
@@ -190,6 +199,60 @@ check_requirements() {
   done
 
   return $status
+}
+
+# Download the lazydocker release binary into ~/.local/bin. Nothing here needs
+# sudo, which is why it goes under $HOME rather than /usr/local/bin.
+install_lazydocker() {
+  # Check the install path as well as PATH: when ~/.local/bin is not on PATH
+  # the first test misses a binary this script itself put there, and we would
+  # re-download it on every run (and hit ETXTBSY if a LazyDocker window has it
+  # open).
+  if command -v lazydocker &>/dev/null; then
+    echo "lazydocker already installed: $(command -v lazydocker)"
+    return 0
+  elif [[ -x "$LAZYDOCKER_BIN_DIR/lazydocker" ]]; then
+    echo "lazydocker already installed: $LAZYDOCKER_BIN_DIR/lazydocker"
+    echo "note: $LAZYDOCKER_BIN_DIR is not on your PATH" >&2
+    return 0
+  fi
+
+  local arch asset version tmp
+  case "$(uname -m)" in
+    x86_64)         arch=x86_64 ;;
+    aarch64|arm64)  arch=arm64 ;;
+    armv7l|armv6l)  arch=armv6 ;;
+    *) echo "no lazydocker build for $(uname -m); skipping" >&2; return 1 ;;
+  esac
+
+  # The API reports the newest tag, so this does not go stale in the script.
+  version=$(curl -fsSL "https://api.github.com/repos/$LAZYDOCKER_REPO/releases/latest" \
+    | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+  if [[ -z "$version" ]]; then
+    echo "could not read the latest lazydocker version; skipping" >&2
+    return 1
+  fi
+
+  asset="lazydocker_${version}_Linux_${arch}.tar.gz"
+  echo "installing lazydocker $version to $LAZYDOCKER_BIN_DIR"
+
+  tmp=$(mktemp -d) || return 1
+  # Unpack only the binary; the tarball also carries a README and LICENSE.
+  if curl -fsSL "https://github.com/$LAZYDOCKER_REPO/releases/download/v$version/$asset" \
+       | tar -xz -C "$tmp" lazydocker; then
+    mkdir -p "$LAZYDOCKER_BIN_DIR"
+    install -m 755 "$tmp/lazydocker" "$LAZYDOCKER_BIN_DIR/lazydocker"
+  else
+    echo "lazydocker download failed ($asset)" >&2
+    rm -rf "$tmp"
+    return 1
+  fi
+  rm -rf "$tmp"
+
+  case ":$PATH:" in
+    *":$LAZYDOCKER_BIN_DIR:"*) ;;
+    *) echo "note: $LAZYDOCKER_BIN_DIR is not on your PATH" >&2 ;;
+  esac
 }
 
 # Install only what is actually missing, so re-running is cheap and safe.
@@ -209,6 +272,10 @@ install_requirements() {
       return 1
     }
   fi
+
+  # A failure here is not fatal: only the LazyDocker window depends on it.
+  echo
+  install_lazydocker || true
 
   echo
   echo "requirements:"
@@ -276,14 +343,14 @@ open_terminals() {
   fi
 
   # Lazydocker
-  launch "88x47+0+0" "LazyDocker" "lazydocker"
+  launch "88x34+0+0" "LazyDocker" "lazydocker"
 
   # Banner
   launch "35x7+0+1060" "Banner" \
     "./projects/home-lab/banner.sh $(printf '%q' "$BANNER_TEXT")"
 
   # Claude Code -- launched last and raised, so it ends up on top
-  launch "113x57+400+0" "CC" "cd $(printf '%q' "$PROJECT_DIR") && claude"
+  launch "145x40+400+0" "CC" "cd $(printf '%q' "$PROJECT_DIR") && claude"
   focus_window "$PROJECT_NAME"
 }
 
