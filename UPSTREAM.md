@@ -62,12 +62,17 @@ LAST_REVIEWED = 5b15a47f2d7150f545fbcacbfe381787fc0230dc
 
 ## Ported skills
 
-Nothing ported yet. One row per skill once we start. "Changes" should normally
-read "none": a straight copy is the default, and anything else needs a matching
-entry in the Deviations section of [docs/sdlc.md](docs/sdlc.md).
+One row per ported skill. "Changes" should normally read "none": a straight copy
+is the default, and anything else needs a matching entry in the Deviations
+section of [docs/sdlc.md](docs/sdlc.md).
 
 | Skill | Upstream path | From commit | Changes |
 | ----- | ------------- | ----------- | ------- |
+| `setup-matt-pocock-skills` | `skills/engineering/setup-matt-pocock-skills/` | `5b15a47` | none, beyond the repo-wide `agents/` omission |
+
+Ported files are kept **byte-identical** to upstream, which is what makes
+`diff -r` against the clone a reliable drift check. Nothing local goes inside a
+ported skill, including provenance notes: this table is the record.
 
 ## Survey, as of 5b15a47 (2026-08-21)
 

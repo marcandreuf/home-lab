@@ -242,6 +242,18 @@ will have the engineering skills guessing at things they should have been told.
 
 ## Deviations
 
-None yet. Anything we change from upstream goes here with the reason, so a later
+Anything we change from upstream goes here with the reason, so a later
 `sync-upstream.sh` diff can tell a deliberate divergence from a change we simply
 have not taken yet.
+
+**`agents/openai.yaml` is not ported.** Repo-wide, every skill. Upstream ships
+one per skill holding Codex picker metadata (`interface.display_name`,
+`interface.short_description`) and, for user-invoked skills, the
+`policy.allow_implicit_invocation: false` that pairs with
+`disable-model-invocation` in the frontmatter. We run Claude Code, which reads
+the frontmatter and ignores that file. Porting it would carry a second copy of
+the invocation setting that nothing here enforces, so the two could silently
+drift apart.
+
+Revisit if we ever run Codex: the file is required there, and upstream's rule is
+that a skill is user-invoked in both harnesses or neither.
