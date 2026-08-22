@@ -21,15 +21,18 @@ Read them in `~/projects/skills`, our fork of that repo (see
 
 ## What we actually have
 
-This page describes the flow **whole**, because the parts only make sense
-against each other. We port a **subset**: upstream carries more than we need,
-and some of it is aimed at problems we do not have.
+All 25 of upstream's promoted skills, so every command named on this page is
+installed. `/ask-matt` is the router over them: ask it when you cannot remember
+which skill fits, and it will place your situation on the flow below.
 
-So a slash command named here is not necessarily installed.
-[../UPSTREAM.md](../UPSTREAM.md) is the authority on what has actually been
-ported; this page is the authority on how the pieces fit when they are. Reading
-about a step we have not ported is useful anyway, since it says what the gap in
-the flow currently is.
+We took the promoted set whole rather than cherry-picking, because these skills
+call each other and `/ask-matt` routes over all of them: a partial port gives
+you skills that fail at a step and a router that points at things that are not
+there. [../UPSTREAM.md](../UPSTREAM.md) has the full list and the two checks
+that keep it honest.
+
+Having a skill installed is not a commitment to use it. Most work only touches
+the main flow.
 
 ## The main flow: idea to ship
 

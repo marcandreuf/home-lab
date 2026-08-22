@@ -66,48 +66,55 @@ One row per ported skill. "Changes" should normally read "none": a straight copy
 is the default, and anything else needs a matching entry in the Deviations
 section of [docs/sdlc.md](docs/sdlc.md).
 
-We port by **cluster**, not skill by skill, so that every skill a ported skill
-calls is present. The set below is the per-repo precondition plus everything in
-the main flow from idea up to (not including) `/implement`, with its feeders.
+**All 25 of upstream's promoted skills**, at `5b15a47`, each a straight copy.
+That is the exact set upstream ships as its Claude Code plugin: everything under
+`skills/engineering/` and `skills/productivity/`.
 
-| Skill | Upstream path | From commit | Changes |
-| ----- | ------------- | ------------ | ------- |
-| `setup-matt-pocock-skills` | `skills/engineering/setup-matt-pocock-skills/` | `5b15a47` | none |
-| `grilling` | `skills/productivity/grilling/` | `5b15a47` | none |
-| `grill-me` | `skills/productivity/grill-me/` | `5b15a47` | none |
-| `grill-with-docs` | `skills/engineering/grill-with-docs/` | `5b15a47` | none |
-| `domain-modeling` | `skills/engineering/domain-modeling/` | `5b15a47` | none |
-| `to-spec` | `skills/engineering/to-spec/` | `5b15a47` | none |
-| `to-tickets` | `skills/engineering/to-tickets/` | `5b15a47` | none |
-| `wayfinder` | `skills/engineering/wayfinder/` | `5b15a47` | none |
-| `research` | `skills/engineering/research/` | `5b15a47` | none |
-| `prototype` | `skills/engineering/prototype/` | `5b15a47` | none |
-| `to-questionnaire` | `skills/productivity/to-questionnaire/` | `5b15a47` | none |
-| `handoff` | `skills/productivity/handoff/` | `5b15a47` | none |
+| Bucket | Skills |
+| ------ | ------ |
+| `skills/engineering/` (18) | `ask-matt`, `codebase-design`, `code-review`, `diagnosing-bugs`, `domain-modeling`, `grill-with-docs`, `implement`, `improve-codebase-architecture`, `prototype`, `research`, `resolving-merge-conflicts`, `setup-matt-pocock-skills`, `tdd`, `to-spec`, `to-tickets`, `triage`, `wayfinder`, `wizard` |
+| `skills/productivity/` (7) | `grilling`, `grill-me`, `handoff`, `teach`, `to-questionnaire`, `wait-what`, `writing-for-agents` |
 
-Every row omits upstream's `agents/openai.yaml`; that is repo-wide and recorded
-once in Deviations rather than repeated per row.
+Taking the promoted set whole, rather than cherry-picking, is what makes
+`ask-matt` truthful: it routes over every user-invoked skill, so a partial port
+leaves it pointing at things that are not there.
+
+Every skill omits upstream's `agents/openai.yaml`; that is repo-wide and
+recorded once in Deviations. Everything else comes across, **including
+non-markdown files**: `wizard/template.sh` and
+`diagnosing-bugs/scripts/hitl-loop.template.sh` are working parts of those
+skills, not metadata.
 
 Ported files are kept **byte-identical** to upstream, which is what makes
 `diff -r` against the clone a reliable drift check. Nothing local goes inside a
-ported skill, including provenance notes: this table is the record.
+ported skill, including provenance notes: this file is the record.
 
-Every Skill-tool call made by a skill above resolves to another skill above.
-Check that still holds before adding a row: a skill whose dependency is missing
-fails at the step that calls it.
+Verify both invariants after any port:
 
-### Deliberately not ported yet
+```sh
+# 1. no drift: every skill matches upstream except agents/
+for d in skills/*/; do n=$(basename "$d"); [ -f "$d/SKILL.md" ] || continue
+  u=$(find ~/projects/skills/skills -maxdepth 2 -type d -name "$n" -not -path '*/deprecated/*' | head -1)
+  diff -rq "$u" "$d" | grep -v 'Only in .*: agents'
+done
 
-The build half of the flow, and the pieces off it:
+# 2. no dangling dependency: every Skill-tool call resolves inside skills/
+for d in skills/*/; do n=$(basename "$d"); [ -f "$d/SKILL.md" ] || continue
+  grep -rhoE 'Skill tool (with|twice, for) "[a-z-]*"( and "[a-z-]*")?' "$d" |
+    grep -oE '"[a-z-]*"' | tr -d '"' | sort -u |
+    while read -r dep; do [ -f "skills/$dep/SKILL.md" ] || echo "MISSING: $n -> $dep"; done
+done
+```
 
-| Skill | What it is | Why not yet |
-| ----- | ---------- | ----------- |
-| `implement`, `tdd`, `code-review` | The build half: spec or issues to committed code | The natural next cluster. `implement` drives the other two |
-| `triage` | On-ramp for issues we did not create | Needs its triage-label vocabulary, and `setup-matt-pocock-skills` skips that section entirely while `triage` is absent. Porting it means re-running setup on any repo already configured |
-| `diagnosing-bugs` | On-ramp for a hard bug | Standalone. Take it when there is a bug worth the discipline |
-| `improve-codebase-architecture`, `codebase-design` | Codebase health, and the deep-module vocabulary | Health work, not definition or build |
-| `ask-matt` | Router over every user-invoked skill | A router that names skills we do not have is a router that lies. Port it when the set stops moving |
-| `resolving-merge-conflicts`, `wizard`, `teach`, `wait-what`, `writing-for-agents` | Standalone utilities | Take individually as the need shows up; nothing depends on them |
+### Not ported
+
+Upstream's unpromoted buckets, which its own plugin does not ship either:
+
+| Bucket | Why |
+| ------ | --- |
+| `skills/misc/` | Kept upstream but not promoted. `git-guardrails-claude-code` (a hook plus `block-dangerous-git.sh`) is the one worth a look, since it fits this repo's character; `migrate-to-shoehorn`, `scaffold-exercises` and `setup-pre-commit` are tied to upstream's own tooling |
+| `skills/in-progress/` | Explicitly beta, and upstream reserves the right to change them under us |
+| `skills/deprecated/` | Gone upstream |
 
 ## Survey, as of 5b15a47 (2026-08-21)
 
