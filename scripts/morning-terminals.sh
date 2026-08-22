@@ -71,6 +71,11 @@
 
 APT_PACKAGES=(xdotool gnome-terminal toilet)
 
+# Derived from this script's own location rather than hardcoded, so the repo can
+# be cloned anywhere. Absolute, because the banner runs in a spawned terminal
+# whose working directory is not this one.
+BANNER_SH="$(cd "$(dirname "$0")" && pwd)/banner.sh"
+
 # lazydocker ships as a GitHub release tarball rather than an apt package.
 LAZYDOCKER_REPO="jesseduffield/lazydocker"
 LAZYDOCKER_BIN_DIR="$HOME/.local/bin"
@@ -190,7 +195,7 @@ check_requirements() {
   fi
 
   local path
-  for path in "$PROJECT_DIR" "$HOME/projects/home-lab/banner.sh"; do
+  for path in "$PROJECT_DIR" "$BANNER_SH"; do
     if [[ -e "$path" ]]; then
       echo "  ok       $path"
     else
@@ -347,7 +352,7 @@ open_terminals() {
 
   # Banner
   launch "35x7+0+1060" "Banner" \
-    "./projects/home-lab/banner.sh $(printf '%q' "$BANNER_TEXT")"
+    "$(printf '%q' "$BANNER_SH") $(printf '%q' "$BANNER_TEXT")"
 
   # Claude Code -- launched last and raised, so it ends up on top
   launch "145x40+400+0" "CC" "cd $(printf '%q' "$PROJECT_DIR") && claude"
