@@ -15,6 +15,7 @@ These scripts help me:
 - [`scripts/`](scripts/README.md) – every shell script, with a page explaining what each one is for and when to reach for it
 - `commands/` – Claude Code slash commands
 - `skills/` – Claude Code skills, one directory per skill ([skills/README.md](skills/README.md))
+- [`docs/sdlc.md`](docs/sdlc.md) – the development flow we work to, and the vocabulary it uses
 - [`UPSTREAM.md`](UPSTREAM.md) – how we track [mattpocock/skills](https://github.com/mattpocock/skills)
 
 ## Scripts
@@ -43,7 +44,7 @@ On a new VM, clone this repo and run `./scripts/install-claude.sh`. That is the 
 
 ### Working on this repo
 
-`scripts/sync-upstream.sh` is only needed on the machine where I actually develop home-lab, not on the VMs that just consume it. It clones [mattpocock/skills](https://github.com/mattpocock/skills) as a sibling at `~/projects/mattpocock-skills` and reports what changed there since the commit recorded in [`UPSTREAM.md`](UPSTREAM.md), so skills get ported deliberately rather than merged. That clone is disposable and the script never writes to `skills/`.
+`scripts/sync-upstream.sh` is only needed on the machine where I actually develop home-lab, not on the VMs that just consume it. It clones [my fork](https://github.com/marcandreuf/skills) of [mattpocock/skills](https://github.com/mattpocock/skills) as a sibling at `~/projects/skills`, wiring `origin` to the fork and `upstream` to Matt's, then reports what changed upstream since the commit recorded in [`UPSTREAM.md`](UPSTREAM.md). The fork is there for contributing back; skills get ported deliberately rather than merged. That clone is disposable and the script never writes to `skills/`.
 
 `UPSTREAM.md` holds the rest: why adapted skills live here rather than in a fork, how a fork is still used for contributing back, which upstream commit was last reviewed, the ledger of what has been ported, and the survey of what is worth taking.
 

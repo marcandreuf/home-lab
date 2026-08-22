@@ -1,17 +1,21 @@
 # Upstream: mattpocock/skills
 
-Skills in `skills/` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
-(MIT). We do not install that repo and we do not treat a fork of it as the home
-for our own skills. We read it, port what earns its place, and rewrite it here.
+Skills in `skills/` come from [mattpocock/skills](https://github.com/mattpocock/skills)
+(MIT). We work to that methodology as written, so skills get ported **faithfully**
+rather than rewritten to taste: the skills are designed to compose, and local
+edits to one quietly break the others that call it. The flow itself is summarised
+in [docs/sdlc.md](docs/sdlc.md).
 
-The reason is churn: upstream landed 173 commits between July and August 2026,
-much of it rewording the inside of the very `SKILL.md` files we would customize.
-Holding our adaptations in a fork would put every upstream pull in conflict with
-our own edits. Reading a diff and deciding is cheap; merging someone else's
-weekly prose rewrites into our adapted copies is not.
+Any deliberate divergence is recorded in the Deviations section of
+`docs/sdlc.md`, with a reason. Everything else is a straight copy.
 
-A fork for **contributing back** is a different thing and is fine, because it
-never holds our adaptations. See `FORK_URL` below.
+Because we track alignment rather than taste, `sync-upstream.sh` matters **more**
+here, not less: an upstream change to a skill we have ported is normally
+something to take, not something to weigh. The ledger below is what tells a
+deliberate divergence apart from a change we simply have not taken yet.
+
+A fork is still useful for **contributing back**, and stays safe because it
+never holds local edits. See `FORK_URL` below.
 
 ## Configuration
 
@@ -21,7 +25,7 @@ the only state that matters and it lives here, so deleting the clone and cloning
 again loses nothing. `sync-upstream.sh` clones it when it is missing.
 
 ```
-UPSTREAM_DIR = ~/projects/mattpocock-skills
+UPSTREAM_DIR = ~/projects/skills
 ```
 
 **FORK_URL** is optional. Set it to a personal fork of `mattpocock/skills` to
@@ -30,7 +34,7 @@ contribute back. `sync-upstream.sh` then clones the fork as `origin` and adds
 still come from upstream. Leave it empty to clone upstream directly.
 
 ```
-FORK_URL =
+FORK_URL = https://github.com/marcandreuf/skills.git
 ```
 
 Whether or not a fork is in play, `sync-upstream.sh` reads from whichever remote
@@ -58,12 +62,12 @@ LAST_REVIEWED = 5b15a47f2d7150f545fbcacbfe381787fc0230dc
 
 ## Ported skills
 
-Nothing ported yet. One row per skill once we start, recording the upstream
-commit it came from and what we changed, so a later diff can tell "upstream
-reworded this" from "we rewrote this on purpose".
+Nothing ported yet. One row per skill once we start. "Changes" should normally
+read "none": a straight copy is the default, and anything else needs a matching
+entry in the Deviations section of [docs/sdlc.md](docs/sdlc.md).
 
-| Skill | Upstream path | From commit | What we changed |
-| ----- | ------------- | ----------- | --------------- |
+| Skill | Upstream path | From commit | Changes |
+| ----- | ------------- | ----------- | ------- |
 
 ## Survey, as of 5b15a47 (2026-08-21)
 
