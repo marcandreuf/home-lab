@@ -66,13 +66,48 @@ One row per ported skill. "Changes" should normally read "none": a straight copy
 is the default, and anything else needs a matching entry in the Deviations
 section of [docs/sdlc.md](docs/sdlc.md).
 
+We port by **cluster**, not skill by skill, so that every skill a ported skill
+calls is present. The set below is the per-repo precondition plus everything in
+the main flow from idea up to (not including) `/implement`, with its feeders.
+
 | Skill | Upstream path | From commit | Changes |
-| ----- | ------------- | ----------- | ------- |
-| `setup-matt-pocock-skills` | `skills/engineering/setup-matt-pocock-skills/` | `5b15a47` | none, beyond the repo-wide `agents/` omission |
+| ----- | ------------- | ------------ | ------- |
+| `setup-matt-pocock-skills` | `skills/engineering/setup-matt-pocock-skills/` | `5b15a47` | none |
+| `grilling` | `skills/productivity/grilling/` | `5b15a47` | none |
+| `grill-me` | `skills/productivity/grill-me/` | `5b15a47` | none |
+| `grill-with-docs` | `skills/engineering/grill-with-docs/` | `5b15a47` | none |
+| `domain-modeling` | `skills/engineering/domain-modeling/` | `5b15a47` | none |
+| `to-spec` | `skills/engineering/to-spec/` | `5b15a47` | none |
+| `to-tickets` | `skills/engineering/to-tickets/` | `5b15a47` | none |
+| `wayfinder` | `skills/engineering/wayfinder/` | `5b15a47` | none |
+| `research` | `skills/engineering/research/` | `5b15a47` | none |
+| `prototype` | `skills/engineering/prototype/` | `5b15a47` | none |
+| `to-questionnaire` | `skills/productivity/to-questionnaire/` | `5b15a47` | none |
+| `handoff` | `skills/productivity/handoff/` | `5b15a47` | none |
+
+Every row omits upstream's `agents/openai.yaml`; that is repo-wide and recorded
+once in Deviations rather than repeated per row.
 
 Ported files are kept **byte-identical** to upstream, which is what makes
 `diff -r` against the clone a reliable drift check. Nothing local goes inside a
 ported skill, including provenance notes: this table is the record.
+
+Every Skill-tool call made by a skill above resolves to another skill above.
+Check that still holds before adding a row: a skill whose dependency is missing
+fails at the step that calls it.
+
+### Deliberately not ported yet
+
+The build half of the flow, and the pieces off it:
+
+| Skill | What it is | Why not yet |
+| ----- | ---------- | ----------- |
+| `implement`, `tdd`, `code-review` | The build half: spec or issues to committed code | The natural next cluster. `implement` drives the other two |
+| `triage` | On-ramp for issues we did not create | Needs its triage-label vocabulary, and `setup-matt-pocock-skills` skips that section entirely while `triage` is absent. Porting it means re-running setup on any repo already configured |
+| `diagnosing-bugs` | On-ramp for a hard bug | Standalone. Take it when there is a bug worth the discipline |
+| `improve-codebase-architecture`, `codebase-design` | Codebase health, and the deep-module vocabulary | Health work, not definition or build |
+| `ask-matt` | Router over every user-invoked skill | A router that names skills we do not have is a router that lies. Port it when the set stops moving |
+| `resolving-merge-conflicts`, `wizard`, `teach`, `wait-what`, `writing-for-agents` | Standalone utilities | Take individually as the need shows up; nothing depends on them |
 
 ## Survey, as of 5b15a47 (2026-08-21)
 
