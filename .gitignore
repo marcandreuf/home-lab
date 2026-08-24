@@ -1,1 +1,13 @@
+# This repo is public, so nothing Claude Code writes locally is tracked: the
+# permission allowlist would carry machine paths, and journals are prose working
+# notes where a credential hides from the usual key=value secret scans. Private
+# repos commit .claude/settings.json and .mcp.json instead, and ignore only
+# journals and settings.local.json -- see docs/sdlc.md "Repo portability".
+#
+# scripts/install-claude.sh also offers to add **/.claude/journals/ and
+# **/.claude/settings.local.json as GLOBAL rules (core.excludesFile), so a repo
+# cloned on a fresh VM is covered before anyone thinks to edit its .gitignore.
+# That is a backstop, not the source of truth. Patterns in a repo's .gitignore
+# have HIGHER precedence than the global file, so this line stands on its own and
+# a machine that never ran the installer is still safe.
 .claude/

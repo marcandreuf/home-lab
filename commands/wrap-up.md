@@ -14,7 +14,10 @@ allowed-tools: Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git b
 REPO_PATH = auto
 ```
 
-**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/`. Journals are checked into `.claude/journals/` so they travel with the repo — add the dir to `.gitignore` if you don't want them committed.
+**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/`. Journals are **not**
+committed — `.gitignore` keeps `.claude/journals/` out of git in every repo, because a
+credential written in prose escapes the scans that catch one in code. They are local
+working notes, backed up out of band. Never treat a journal as version-controlled.
 
 ---
 
@@ -138,7 +141,12 @@ Self-contained checkpoint for resuming this work the next day. Assume the next s
 - **Capture WHY, not just WHAT.** Decisions without reasoning rot fast.
 - **Be specific in "Next session: start here".** A vague next step ("continue feature work") is useless; a specific one ("edit `src/auth/session.py` line ~45 to add leeway in `refresh_token()`") is gold.
 - **Do not paste large code blocks** — reference paths and line ranges instead. The next session can read the files.
-- **Do not commit** the wrap-up file unless the user explicitly asks — leave it as an untracked file (or gitignored) by default.
+- **Scrub secrets before writing.** Journals are prose, so a credential in one reads as
+  "password `hunter2`", not `KEY=value`, and a keyword grep will miss it. Never write a
+  token, password, or key literal into a journal: name where the value lives instead.
+- **Do not commit the journal.** `.claude/journals/` is gitignored in every repo by
+  policy. Leave the file untracked; do not offer to add it, and do not suggest
+  un-ignoring the directory.
 - **Do not run `git push`, `gh`, or any send/post command.**
 - One short closing paragraph to the user after writing — not the full doc.
 

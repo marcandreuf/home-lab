@@ -49,6 +49,12 @@ a repo root, so a session started above one silently gets the union of everythin
 below it. Cross-repo access is granted per case, not as a standing default. See
 [One repo per session](docs/sdlc.md#one-repo-per-session).
 
+A rebuilt VM should cost a `git clone` and little else, so every repo commits its
+`.claude/settings.json` and `.mcp.json` — the permission allowlist and MCP servers
+that Claude Code would otherwise keep machine-locally. Journals and
+`.claude/settings.local.json` are never committed: they are backed up out of band.
+See [Repo portability](docs/sdlc.md#repo-portability) for the reasoning.
+
 ### Working on this repo
 
 `scripts/sync-upstream.sh` is only needed on the machine where I actually develop home-lab, not on the VMs that just consume it. It clones [my fork](https://github.com/marcandreuf/skills) of [mattpocock/skills](https://github.com/mattpocock/skills) as a sibling at `~/projects/skills`, wiring `origin` to the fork and `upstream` to Matt's, then reports what changed upstream since the commit recorded in [`UPSTREAM.md`](UPSTREAM.md). The fork is there for contributing back; skills get ported deliberately rather than merged. That clone is disposable and the script never writes to `skills/`.

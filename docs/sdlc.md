@@ -266,6 +266,46 @@ path to read, hand over the specific file, or open a second session in that repo
 with its own journal. The rule being retired is the *default* — a parent root
 that silently widens every session, forever, so that one task can see one file.
 
+## Repo portability
+
+A VM is disposable. Rebuilding one should cost a `git clone` and little else, so
+the machine-specific wiring a project needs is committed rather than left to
+accumulate in `~/.claude`. Because a session is scoped to exactly one repo (see
+above), that repo is the only place the wiring can live and still be found.
+
+**Every repo commits two files:**
+
+- `.claude/settings.json` — the shared, curated permission allowlist, so a
+  rebuilt VM does not spend its first day re-approving the same commands.
+- `.mcp.json` — the repo's MCP servers. Claude Code otherwise keeps these in
+  `~/.claude.json` keyed by absolute path, which is machine-local and dies with
+  the VM.
+
+Both are reviewable at a glance and contain no prose, which is what makes them
+safe to commit without a standing audit obligation.
+
+**Journals are never committed, in any repo.** `.gitignore` keeps
+`.claude/journals/` out everywhere. The reasoning is not that journals are more
+secret than the code beside them — in a private repo holding deploy workflows and
+infrastructure scripts, they usually are not. It is that journals are *prose*,
+and a credential written in prose reads as "password `hunter2`" rather than
+`KEY=value`, so the scans that catch a secret in code slide straight past one in
+a journal. Committing them would mean a permanent review obligation on every
+session's output, with a failure mode — a literal in git history — that is
+expensive to undo. The trade is deliberate: journals lose `git clone` recovery
+and get backed up out of band instead.
+
+That same property applies on disk. A journal should never contain a token,
+password, or key literal; name where the value lives instead.
+
+**`.claude/settings.local.json` is never committed either.** It is where Claude
+Code accumulates whatever was approved in the moment, and that accretion is not
+policy — it collects absolute paths that are wrong on the next machine, one-shot
+invocations pinned to a date or a screen coordinate, and pasted tokens and
+passwords. It is the file that is *supposed* to be lost in a rebuild. Promote a
+rule to `settings.json` deliberately, generalised and path-free; leave the rest
+to rot.
+
 ## Deviations
 
 Anything we change from upstream goes here with the reason, so a later
