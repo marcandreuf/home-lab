@@ -260,6 +260,15 @@ skill cannot name a single tracker, and `git status` describes nothing the
 session is actually working on. A wrapper folder does not organise several repos
 — it creates a fourth, unversioned context that outlives the reason it existed.
 
+**The tooling stays machine-wide.** Scoping a *session* to one repo is not the
+same as giving each repo its own copy of the commands and skills:
+`scripts/install-claude.sh` installs once into `~/.claude` and has no per-repo
+mode. The commands resolve the repo they operate on at run time, so one set is
+already correct everywhere; copies in a repo would only be a fork that drifts
+from home-lab in silence — and in a repo that commits `.claude/settings.json`, a
+fork that gets committed. A command that needs to behave differently is changed
+in home-lab, where every VM picks it up.
+
 **Cross-repo context is granted per case, never standing.** When a session
 genuinely needs to see another folder, decide it there and then: name the exact
 path to read, hand over the specific file, or open a second session in that repo

@@ -11,12 +11,12 @@ anywhere and the scripts can be run from any working directory.
 
 ### `morning-terminals.sh`
 
-Opens the morning workspace as gnome-terminal windows at fixed sizes and screen
+Opens the morning terminal layout as gnome-terminal windows at fixed sizes and
 positions (lazydocker, a banner, and Claude Code), then raises the Claude Code
 window so it lands on top. X11 only, since it uses `xdotool` to place windows.
 
 ```sh
-./scripts/morning-terminals.sh              # opens in ~/projects
+./scripts/morning-terminals.sh              # opens in ~/projects — a picker, not a session
 ./scripts/morning-terminals.sh foo          # opens in ~/projects/foo, banner "FOO"
 ./scripts/morning-terminals.sh --banner Memship
 ./scripts/morning-terminals.sh --install    # install missing requirements
@@ -24,7 +24,10 @@ window so it lands on top. X11 only, since it uses `xdotool` to place windows.
 ```
 
 A bare project name resolves under `~/projects`; anything with a slash is used
-as the path itself, absolute or relative to `$HOME`. Run `--install` once on a
+as the path itself, absolute or relative to `$HOME`. Pass one repo: a session is
+scoped to a single repo root ([One repo per
+session](../docs/sdlc.md#one-repo-per-session)), so the bare `~/projects` default
+is where you pick one, not where you work. Run `--install` once on a
 new machine: it installs `xdotool`, `gnome-terminal` and `toilet` from apt, and
 fetches the `lazydocker` release binary, which is not packaged.
 
@@ -54,10 +57,9 @@ the machine gets them and a later `git pull` here updates them all at once. This
 is the whole setup on a new VM.
 
 ```sh
-./scripts/install-claude.sh                        # global, into ~/.claude
+./scripts/install-claude.sh                        # into ~/.claude
 ./scripts/install-claude.sh --check                # what is wired up, change nothing
 ./scripts/install-claude.sh --uninstall            # remove links pointing into this repo
-./scripts/install-claude.sh --workspace ~/projects/foo --copy
 ```
 
 Existing real files are reported and skipped rather than overwritten, so a
@@ -65,10 +67,36 @@ hand-written command in `~/.claude/commands` survives; `--force` replaces them.
 `--uninstall` only removes symlinks that resolve into this repo and leaves
 anything else alone.
 
-`--workspace PATH` installs into one project's `.claude/` instead of globally.
-Add `--copy` there to get editable files that deliberately diverge from this
-repo, which is the point of a project-local override; without it you get
-symlinks that keep tracking this repo.
+**The install is always global — there is no per-repo install.** The commands are
+written to resolve the repo they operate on at run time, so one machine-wide set
+is already correct in every repo; a repo-local copy would add nothing but a fork
+that drifts, and in a repo that commits `.claude/settings.json` it would be a
+fork that gets committed. To change how a command behaves, edit it here and
+`git pull` on each VM — the symlink means there is nothing to re-install.
+
+That is separate from a session being scoped to one repo ([One repo per
+session](../docs/sdlc.md#one-repo-per-session)): that rule is about where a
+session *runs*, not about each repo owning a copy of the tooling.
+
+`--project`, `--workspace` and `--copy` are still recognised and exit with that
+explanation rather than doing something surprising.
+
+A global install then **offers** to add two rules to the global git ignore file:
+
+```
+**/.claude/journals/
+**/.claude/settings.local.json
+```
+
+The commands only instruct the model not to commit a journal; these rules are
+what actually stop `git add -A`, in every repo on the machine including ones not
+cloned yet — which is exactly the state a rebuilt VM is in. The script asks
+first, appends only the rules that are absent, never rewrites an existing line,
+and writes to the file git really consults (`core.excludesFile` when set, the XDG
+default otherwise). Answer up front with `--git-rules` or `--no-git-rules`; when
+stdin is not a terminal it skips rather than assuming. `--check` reports each
+rule as present or absent, and `--uninstall` leaves them alone — they are a git
+preference you opted into, not a link this script owns.
 
 ### `sync-upstream.sh`
 

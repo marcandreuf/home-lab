@@ -3,92 +3,199 @@
 # install-claude.sh - Wire this repo's Claude commands and skills into Claude Code
 #
 # Usage:
-#   ./install-claude.sh                       Install globally into ~/.claude
-#   ./install-claude.sh --workspace PATH      Install into PATH/.claude instead
+#   ./install-claude.sh                       Install into ~/.claude
 #   ./install-claude.sh --check               Report what is installed, change nothing
 #   ./install-claude.sh --uninstall           Remove links that point into this repo
 #   ./install-claude.sh --help                Show usage
 #
-# Everything in commands/ and skills/ is symlinked into the target .claude
-# directory, so a `git pull` in this repo updates every command and skill on
-# that machine at once. Re-run after adding, renaming, or removing one.
+# Everything in commands/ and skills/ is symlinked into ~/.claude, so a
+# `git pull` in this repo updates every command and skill on that machine at
+# once. Re-run after adding, renaming, or removing one.
 #
-# The global install is the one you want on a new VM: it makes the commands
-# available in every project on that machine. --workspace is for a single
-# project that needs its own wiring; pair it with --copy to get editable files
-# that deliberately diverge from this repo (a project-local override), rather
-# than symlinks that track it.
+# THE INSTALL IS ALWAYS GLOBAL. There is no per-repo install, by design. One
+# machine-wide set that a single `git pull` updates is the only arrangement that
+# stays honest: a repo-local copy of all 27 entries is a fork that drifts
+# silently, and in a repo that commits .claude/settings.json it gets swept into
+# git as a duplicate of this one. A session is scoped to one repo (docs/sdlc.md,
+# "One repo per session") -- that is about where a session RUNS, not about
+# giving each repo its own copy of the tooling.
+#
+# The commands do not need a per-repo variant to begin with: they resolve the
+# repo they operate on at run time (`git rev-parse --show-toplevel`), so one
+# file behaves correctly in every repo on the machine. Changing how a command
+# works is an edit in this repo followed by `git pull` on each VM -- the symlink
+# means there is nothing to re-install. `--force` is there for the one case that
+# needs it: a real file sitting where the symlink belongs.
 #
 # Existing real files are never overwritten. They are reported and skipped, so
 # a hand-written command in ~/.claude/commands survives this script. Pass
 # --force to replace them.
+#
+# GLOBAL GIT RULES (opt-in)
+#
+# A global install also offers to write two rules into the global git ignore
+# file, which is what actually keeps journals and local settings out of every
+# repo on the machine -- the commands only instruct the model, and a per-repo
+# .gitignore has to be remembered for each new clone. The script asks before
+# touching anything, appends only rules that are missing, and never rewrites
+# an existing line. Answer up front with --git-rules / --no-git-rules; when
+# stdin is not a terminal the step is skipped rather than assumed.
 
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 action=install
-target=""
-mode=link
 force=0
+CLAUDE_DIR="$HOME/.claude"
+git_rules=ask            # ask | yes | no
+
+# The rules the global install offers to add. Journals are never committed in
+# any repo, and settings.local.json is the file that is supposed to die with
+# the VM; both are per-repo decisions today, which means one forgotten clone
+# undoes them.
+GIT_IGNORE_RULES=(
+  '**/.claude/journals/'
+  '**/.claude/settings.local.json'
+)
 
 usage() {
   cat <<EOF
 install-claude.sh - Wire this repo's Claude commands and skills into Claude Code
 
 Usage:
-  $0                       Install globally into ~/.claude
-  $0 --workspace PATH      Install into PATH/.claude instead
-  $0 --check               Report what is installed, change nothing
-  $0 --uninstall           Remove links that point into this repo
-  $0 --help                Show usage
+  $0               Install into ~/.claude (always global -- see below)
+  $0 --check       Report what is installed, change nothing
+  $0 --uninstall   Remove links that point into this repo
+  $0 --help        Show usage
 
 Options:
-  --copy       Copy files instead of symlinking them. Only meaningful with
-               --workspace, where the point is a project-local override that
-               diverges from this repo.
-  --force      Replace existing real files instead of skipping them.
+  --force        Replace existing real files instead of skipping them.
+  --git-rules    Add the global git ignore rules without asking.
+  --no-git-rules Leave the global git ignore file alone without asking.
 
 Examples:
-  $0                                    every project on this VM gets the commands
-  $0 --check                            what is wired up right now
-  $0 --workspace ~/projects/foo --copy  editable override just for foo
+  $0               every repo on this VM gets the commands
+  $0 --check       what is wired up right now
+  $0 --git-rules   unattended install, git rules included
+
+There is no per-repo install. One machine-wide set, updated by \`git pull\` here:
+the commands resolve the repo they operate on at run time, so the same file is
+correct everywhere. To change how one behaves, edit it in this repo.
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --workspace|-w)
-      if [[ $# -lt 2 ]]; then
-        echo "$1 needs a path" >&2; echo; usage; exit 1
-      fi
-      target="$2"; shift 2 ;;
-    --workspace=*) target="${1#--workspace=}"; shift ;;
-    --check)     action=check;     shift ;;
-    --uninstall) action=uninstall; shift ;;
-    --copy)      mode=copy;        shift ;;
-    --force)     force=1;          shift ;;
-    --help|-h)   usage; exit 0 ;;
-    *)           echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
+    --project|--project=*|-p|--workspace|--workspace=*|-w|--copy)
+      # Removed, not renamed. Installing every command and skill into a single
+      # repo produced a silent fork of this one, and now that private repos
+      # commit .claude/settings.json it would be committed alongside it.
+      echo "$1: per-repo installs were removed; the install is always global" >&2
+      echo >&2
+      echo "run \`$0\` with no arguments. The commands resolve the repo they" >&2
+      echo "operate on at run time, so one machine-wide set is correct in every" >&2
+      echo "repo; to change how one behaves, edit it in this repo and git pull." >&2
+      exit 1 ;;
+    --check)        action=check;     shift ;;
+    --uninstall)    action=uninstall; shift ;;
+    --force)        force=1;          shift ;;
+    --git-rules)    git_rules=yes;    shift ;;
+    --no-git-rules) git_rules=no;     shift ;;
+    --help|-h)      usage; exit 0 ;;
+    *)              echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
   esac
 done
 
-if [[ -n "$target" ]]; then
-  if [[ ! -d "$target" ]]; then
-    echo "workspace does not exist: $target" >&2
-    exit 1
+# ---------------------------------------------------------------- git rules --
+#
+# The commands tell the model not to commit a journal. Only git can enforce it,
+# and only the global ignore file does so for repos that do not exist yet --
+# which is the case a rebuilt VM is in.
+
+GIT_RULES_MARKER='# home-lab: Claude Code working files, never committed'
+
+# The file git actually consults: core.excludesFile when set, otherwise the XDG
+# default. Appending to anything else writes a file git will never read.
+git_ignore_file() {
+  local configured
+  configured="$(git config --global --get core.excludesFile 2>/dev/null || true)"
+  if [[ -n "$configured" ]]; then
+    echo "${configured/#\~/$HOME}"
+  else
+    echo "${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
   fi
-  CLAUDE_DIR="$(cd "$target" && pwd)/.claude"
-  scope="workspace $target"
-else
-  CLAUDE_DIR="$HOME/.claude"
-  scope="global"
-  if [[ "$mode" == copy ]]; then
-    echo "--copy is only meaningful with --workspace" >&2
-    echo "a global copy would stop tracking this repo, which is the whole point of installing" >&2
-    exit 1
+}
+
+# Exact-line match. A commented-out or narrower variant is not the rule.
+git_rule_present() {
+  local file="$1" rule="$2"
+  [[ -f "$file" ]] && grep -qxF -- "$rule" "$file"
+}
+
+git_rules_missing() {
+  local file="$1" rule
+  for rule in "${GIT_IGNORE_RULES[@]}"; do
+    git_rule_present "$file" "$rule" || echo "$rule"
+  done
+}
+
+# Append only what is absent, and never rewrite an existing line.
+git_rules_apply() {
+  local file="$1"; shift
+  local missing=("$@") rule
+  mkdir -p "$(dirname "$file")"
+  # A file not ending in a newline would swallow the first rule onto its last line.
+  if [[ -s "$file" && -n "$(tail -c 1 "$file")" ]]; then
+    echo >> "$file"
   fi
-fi
+  if ! git_rule_present "$file" "$GIT_RULES_MARKER"; then
+    printf '%s\n' "$GIT_RULES_MARKER" >> "$file"
+  fi
+  for rule in "${missing[@]}"; do
+    printf '%s\n' "$rule" >> "$file"
+    echo "  added    $rule"
+  done
+  echo "written to $file"
+}
+
+# Offered on a global install only: a repo-local install says nothing about the
+# other repos on the machine, which is the whole point of the rules.
+git_rules_step() {
+  local file missing=()
+  file="$(git_ignore_file)"
+  mapfile -t missing < <(git_rules_missing "$file")
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "global git rules: already in place ($file)"
+    return 0
+  fi
+
+  case "$git_rules" in
+    no)
+      echo "global git rules: skipped (--no-git-rules); ${#missing[@]} rule(s) absent from $file"
+      return 0 ;;
+    ask)
+      if [[ ! -t 0 ]]; then
+        echo "global git rules: skipped (not a terminal); re-run with --git-rules to add them"
+        return 0
+      fi
+      echo
+      echo "Add these rules to your global git ignore ($file)?"
+      local rule
+      for rule in "${missing[@]}"; do echo "  $rule"; done
+      echo "They keep journals and local Claude settings out of every repo on this"
+      echo "machine, including repos not cloned yet. Nothing else is modified."
+      local reply=""
+      read -r -p "add them? [y/N] " reply || reply=""
+      case "$reply" in
+        [yY]|[yY][eE][sS]) ;;
+        *) echo "left $file alone"; return 0 ;;
+      esac ;;
+  esac
+
+  git_rules_apply "$file" "${missing[@]}"
+}
 
 # Collect what this repo has to offer. Commands are single .md files; skills are
 # directories containing a SKILL.md, which is the unit Claude Code loads.
@@ -184,14 +291,8 @@ for entry in "${sources[@]}"; do
         rm -rf "$dest"
       fi
 
-      if [[ "$mode" == copy ]]; then
-        rm -rf "$dest"
-        cp -r "$src" "$dest"
-        echo "copied $rel"
-      else
-        ln -sfn "$src" "$dest"
-        echo "linked $rel -> ${src#$REPO/}"
-      fi
+      ln -sfn "$src" "$dest"
+      echo "linked $rel -> ${src#$REPO/}"
       installed=$((installed + 1))
       ;;
   esac
@@ -199,8 +300,24 @@ done
 
 echo
 case "$action" in
-  check)     echo "$scope: $installed installed, $skipped missing or foreign ($CLAUDE_DIR)" ;;
-  uninstall) echo "$scope: $removed removed, $skipped kept ($CLAUDE_DIR)" ;;
-  install)   echo "$scope: $installed installed, $skipped skipped ($CLAUDE_DIR)"
-             [[ "$mode" == link ]] && echo "a \`git pull\` in $REPO now updates all of them" ;;
+  check)     echo "$installed installed, $skipped missing or foreign ($CLAUDE_DIR)" ;;
+  uninstall) echo "$removed removed, $skipped kept ($CLAUDE_DIR)" ;;
+  install)   echo "$installed installed, $skipped skipped ($CLAUDE_DIR)"
+             echo "a \`git pull\` in $REPO now updates all of them" ;;
+esac
+
+# --uninstall leaves the git rules alone: they are a git preference the user
+# opted into, not a link this script owns.
+case "$action" in
+  install) git_rules_step ;;
+  check)
+    git_ignore_path="$(git_ignore_file)"
+    for rule in "${GIT_IGNORE_RULES[@]}"; do
+      if git_rule_present "$git_ignore_path" "$rule"; then
+        echo "  present  $rule"
+      else
+        echo "  ABSENT   $rule"
+      fi
+    done
+    echo "global git rules ($git_ignore_path)" ;;
 esac

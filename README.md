@@ -37,7 +37,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 
 On a new VM, clone this repo and run `./scripts/install-claude.sh`. That is the whole setup: it symlinks the commands and skills into `~/.claude`, so a later `git pull` here updates every one of them on that machine at once.
 
-- `commands/` – slash commands, written to be portable: they resolve the repo they operate on at run time rather than hardcoding a path, so the same file works on every VM. A project needing different wiring keeps its own override in that project's `.claude/commands/`.
+- `commands/` – slash commands, written to be portable: they resolve the repo they operate on at run time rather than hardcoding a path, so the same file works on every VM. That is why the install is global and there is no per-repo copy: to change how a command behaves, edit it here and `git pull` on each VM.
   - `start-of-day.md` – resume from the latest journal in `.claude/journals/` and verify the repo still matches it
   - `wrap-up.md` – checkpoint the session into a dated journal so the next day can start cold
 - `skills/` – skills, one directory per skill. See [skills/README.md](skills/README.md).
