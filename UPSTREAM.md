@@ -47,6 +47,8 @@ One row per ported skill. "Changes" should normally read "none": a straight copy
 
 Taking the promoted set whole, rather than cherry-picking, is what makes `ask-matt` truthful: it routes over every user-invoked skill, so a partial port leaves it pointing at things that are not there.
 
+**Outside the promoted set:** `misc/git-guardrails-claude-code` is ported as `scripts/block-dangerous-commands.sh`, renamed and with a widened pattern list. It is a script and a hook rather than a skill, so `sync-upstream.sh` will not track it by directory name — check that directory by hand. See the Deviations section of [docs/sdlc.md](docs/sdlc.md) for what changed and why.
+
 Every skill omits upstream's `agents/openai.yaml`; that is repo-wide and recorded once in Deviations. Everything else comes across, **including non-markdown files**: `wizard/template.sh` and `diagnosing-bugs/scripts/hitl-loop.template.sh` are working parts of those skills, not metadata.
 
 Ported files are kept **byte-identical** to upstream, which is what makes `diff -r` against the clone a reliable drift check. Nothing local goes inside a ported skill, including provenance notes: this file is the record.
@@ -121,7 +123,7 @@ Note `code-review` is only half-coupled: its **Standards** axis is free-standing
 
 ### Worth a look, outside the promoted set
 
-`misc/git-guardrails-claude-code` is a hook plus `scripts/block-dangerous-git.sh` that blocks destructive git commands. A shell script and a hook, which is what this repo mostly is.
+`misc/git-guardrails-claude-code` is a hook plus `scripts/block-dangerous-git.sh` that blocks destructive git commands. A shell script and a hook, which is what this repo mostly is. **Taken** — see the Deviations section of [docs/sdlc.md](docs/sdlc.md).
 
 ## Overlap with what we already have
 

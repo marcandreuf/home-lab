@@ -53,7 +53,7 @@ That is separate from a session being scoped to one repo ([One repo per session]
 
 `--project`, `--workspace` and `--copy` are still recognised and exit with that explanation rather than doing something surprising.
 
-A global install then **offers** to add two rules to the global git ignore file:
+A global install then **offers** two machine-wide changes, each asked for separately and each skippable. First, the guardrails hook in `~/.claude/settings.json` (`--hooks` / `--no-hooks`), described above. Second, two rules in the global git ignore file (`--git-rules` / `--no-git-rules`):
 
 ```
 **/.claude/journals/
@@ -61,6 +61,18 @@ A global install then **offers** to add two rules to the global git ignore file:
 ```
 
 The commands only instruct the model not to commit a journal; these rules are what actually stop `git add -A`, in every repo on the machine including ones not cloned yet — which is exactly the state a rebuilt VM is in. The script asks first, appends only the rules that are absent, never rewrites an existing line, and writes to the file git really consults (`core.excludesFile` when set, the XDG default otherwise). Answer up front with `--git-rules` or `--no-git-rules`; when stdin is not a terminal it skips rather than assuming. `--check` reports each rule as present or absent, and `--uninstall` leaves them alone — they are a git preference you opted into, not a link this script owns.
+
+### `block-dangerous-commands.sh`
+
+A `PreToolUse` hook: Claude Code pipes it the pending Bash command as JSON, and it exits 2 to refuse anything destructive. `install-claude.sh` offers to wire it into `~/.claude/settings.json`, machine-wide, pointing at this file so a `git pull` updates the rules.
+
+Blocked: `git push` (all variants), `reset --hard`, `clean -f`, `branch -D`, `checkout .` / `restore .`, history rewrites (`filter-branch`, `reflog expire`, `gc --prune`, `update-ref -d`), `gh repo delete/archive/rename`, `gh api` with a write flag, `rm -rf` on an absolute path or `$HOME`, and `docker prune` / `volume rm` / `compose down -v`.
+
+The point of a hook rather than a `deny` rule in `settings.json` is that permission rules match a command *prefix*, so `Bash(gh api -X:*)` catches `gh api -X DELETE repos/x` and misses `gh api repos/x -X DELETE`, `gh api -XDELETE ...`, and anything inside `bash -c`. A hook is handed the whole string.
+
+Two limits, both deliberate. It matches text, so `eval` and base64 go around it — a guardrail, not a sandbox. And it matches anywhere in the line, which is what catches `cd /tmp && git push`, at the price of also blocking a command that merely mentions a blocked phrase (`echo 'git push is what I would do'`). Anchoring would fix that and lose the `bash -c` case, which is the worse miss.
+
+Ported from upstream's `misc/git-guardrails-claude-code` and widened past git; see the Deviations section of [../docs/sdlc.md](../docs/sdlc.md).
 
 ### `sync-upstream.sh`
 

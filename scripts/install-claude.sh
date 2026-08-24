@@ -31,6 +31,14 @@
 # a hand-written command in ~/.claude/commands survives this script. Pass
 # --force to replace them.
 #
+# GUARDRAILS HOOK (opt-in)
+#
+# A global install also offers to wire scripts/block-dangerous-commands.sh into
+# ~/.claude/settings.json as a PreToolUse hook on Bash, so destructive commands
+# are refused before they run. The settings entry points at this repo, so a
+# `git pull` updates the rules with nothing to re-install. Answer up front with
+# --hooks / --no-hooks.
+#
 # GLOBAL GIT RULES (opt-in)
 #
 # A global install also offers to write two rules into the global git ignore
@@ -47,9 +55,10 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 action=install
 force=0
+git_rules=ask            # ask | yes | no   (overwritten below if flags given)
+hooks=ask                # ask | yes | no
 CLAUDE_DIR="$HOME/.claude"
-git_rules=ask            # ask | yes | no
-
+HOOK_SCRIPT_NAME=block-dangerous-commands.sh
 # The rules the global install offers to add. Journals are never committed in
 # any repo, and settings.local.json is the file that is supposed to die with
 # the VM; both are per-repo decisions today, which means one forgotten clone
@@ -73,6 +82,8 @@ Options:
   --force        Replace existing real files instead of skipping them.
   --git-rules    Add the global git ignore rules without asking.
   --no-git-rules Leave the global git ignore file alone without asking.
+  --hooks        Install the guardrails hook without asking.
+  --no-hooks     Leave ~/.claude/settings.json alone without asking.
 
 Examples:
   $0               every repo on this VM gets the commands
@@ -102,10 +113,112 @@ while [[ $# -gt 0 ]]; do
     --force)        force=1;          shift ;;
     --git-rules)    git_rules=yes;    shift ;;
     --no-git-rules) git_rules=no;     shift ;;
+    --hooks)        hooks=yes;        shift ;;
+    --no-hooks)     hooks=no;         shift ;;
     --help|-h)      usage; exit 0 ;;
     *)              echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
   esac
 done
+
+# ----------------------------------------------------------------- guardrails --
+#
+# A PreToolUse hook sees the whole command string, so it catches what a
+# permission deny rule cannot: a dangerous flag in a late argument position, or
+# a command wrapped in `bash -c`. The settings entry points at this repo, so the
+# rules update with a `git pull`.
+
+hook_path() { echo "$REPO/scripts/$HOOK_SCRIPT_NAME"; }
+
+hook_present() {
+  local settings="$1" hook="$2"
+  [[ -f "$settings" ]] || return 1
+  SETTINGS="$settings" HOOK="$hook" python3 -c '
+import json, os, sys
+try:
+    d = json.load(open(os.environ["SETTINGS"]))
+except Exception:
+    sys.exit(1)
+want = os.environ["HOOK"]
+for group in d.get("hooks", {}).get("PreToolUse", []):
+    for h in group.get("hooks", []):
+        if want in str(h.get("command", "")):
+            sys.exit(0)
+sys.exit(1)
+' 2>/dev/null
+}
+
+# Merge into whatever is already in settings.json rather than writing the file
+# fresh: it holds the user own preferences and this script does not own them.
+hook_install() {
+  local settings="$1" hook="$2"
+  mkdir -p "$(dirname "$settings")"
+  SETTINGS="$settings" HOOK="$hook" python3 -c '
+import json, os
+path, hook = os.environ["SETTINGS"], os.environ["HOOK"]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except FileNotFoundError:
+    data = {}
+except Exception as e:
+    raise SystemExit("cannot parse %s: %s; fix or move it and re-run" % (path, e))
+
+pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
+entry = {"type": "command", "command": hook}
+for group in pre:
+    if group.get("matcher") == "Bash":
+        group.setdefault("hooks", []).append(entry)
+        break
+else:
+    pre.append({"matcher": "Bash", "hooks": [entry]})
+
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+print("  hooked   PreToolUse:Bash -> " + hook)
+print("written to " + path)
+'
+}
+
+hook_step() {
+  local settings="$CLAUDE_DIR/settings.json" hook
+  hook="$(hook_path)"
+
+  if [[ ! -x "$hook" ]]; then
+    echo "guardrails hook: skipped, $hook is missing or not executable"
+    return 0
+  fi
+  if hook_present "$settings" "$hook"; then
+    echo "guardrails hook: already in place ($settings)"
+    return 0
+  fi
+
+  case "$hooks" in
+    no)
+      echo "guardrails hook: skipped (--no-hooks)"
+      return 0 ;;
+    ask)
+      if [[ ! -t 0 ]]; then
+        echo "guardrails hook: skipped (not a terminal); re-run with --hooks to add it"
+        return 0
+      fi
+      echo
+      echo "Install the guardrails hook into $settings?"
+      echo "  PreToolUse on Bash -> $hook"
+      echo "It refuses destructive commands before they run: git push, reset --hard,"
+      echo "clean -f, history rewrites, gh repo/api writes, rm -rf on absolute paths,"
+      echo "and docker prune / volume rm. Read the script header for the full list"
+      echo "and its limits. Your other settings are left untouched."
+      local reply=""
+      read -r -p "install it? [y/N] " reply || reply=""
+      case "$reply" in
+        [yY]|[yY][eE][sS]) ;;
+        *) echo "left $settings alone"; return 0 ;;
+      esac ;;
+  esac
+
+  hook_install "$settings" "$hook"
+}
 
 # ---------------------------------------------------------------- git rules --
 #
@@ -309,7 +422,7 @@ esac
 # --uninstall leaves the git rules alone: they are a git preference the user
 # opted into, not a link this script owns.
 case "$action" in
-  install) git_rules_step ;;
+  install) git_rules_step; hook_step ;;
   check)
     git_ignore_path="$(git_ignore_file)"
     for rule in "${GIT_IGNORE_RULES[@]}"; do
@@ -319,5 +432,10 @@ case "$action" in
         echo "  ABSENT   $rule"
       fi
     done
-    echo "global git rules ($git_ignore_path)" ;;
+    echo "global git rules ($git_ignore_path)"
+    if hook_present "$CLAUDE_DIR/settings.json" "$(hook_path)"; then
+      echo "  present  guardrails hook (PreToolUse:Bash)"
+    else
+      echo "  ABSENT   guardrails hook (PreToolUse:Bash)"
+    fi ;;
 esac
