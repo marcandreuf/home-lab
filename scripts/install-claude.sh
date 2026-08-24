@@ -69,6 +69,19 @@ GIT_IGNORE_RULES=(
   '**/.claude/settings.local.json'
 )
 
+# Prose shown to the user is written one paragraph per line and folded here, at
+# the real terminal width and only on spaces. Hard-wrapping it in the source puts
+# a break mid-sentence at every width except the one it was written for. Defined
+# before usage() because arg parsing calls both.
+say() {
+  local width
+  width="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
+  [[ "$width" =~ ^[0-9]+$ ]] || width=80
+  (( width > 100 )) && width=100
+  (( width < 40 )) && width=40
+  printf '%s\n' "$*" | fold -s -w "$width"
+}
+
 usage() {
   cat <<EOF
 install-claude.sh - Wire this repo's Claude commands and skills into Claude Code
@@ -91,10 +104,8 @@ Examples:
   $0 --check       what is wired up right now
   $0 --git-rules   unattended install, git rules included
 
-There is no per-repo install. One machine-wide set, updated by \`git pull\` here:
-the commands resolve the repo they operate on at run time, so the same file is
-correct everywhere. To change how one behaves, edit it in this repo.
 EOF
+  say "There is no per-repo install. One machine-wide set, updated by \`git pull\` here: the commands resolve the repo they operate on at run time, so the same file is correct everywhere. To change how one behaves, edit it in this repo."
 }
 
 while [[ $# -gt 0 ]]; do
@@ -105,9 +116,7 @@ while [[ $# -gt 0 ]]; do
       # commit .claude/settings.json it would be committed alongside it.
       echo "$1: per-repo installs were removed; the install is always global" >&2
       echo >&2
-      echo "run \`$0\` with no arguments. The commands resolve the repo they" >&2
-      echo "operate on at run time, so one machine-wide set is correct in every" >&2
-      echo "repo; to change how one behaves, edit it in this repo and git pull." >&2
+      say "Run \`$0\` with no arguments. The commands resolve the repo they operate on at run time, so one machine-wide set is correct in every repo; to change how one behaves, edit it in this repo and git pull." >&2
       exit 1 ;;
     --check)        action=check;     shift ;;
     --uninstall)    action=uninstall; shift ;;
@@ -216,14 +225,18 @@ hook_step() {
         return 0
       fi
       echo
-      echo "Install the guardrails hook into $settings?"
-      echo "  PreToolUse on Bash -> $hook"
-      echo "It refuses destructive commands before they run: git push, reset --hard,"
-      echo "clean -f, history rewrites, gh repo/api writes, rm -rf on absolute paths,"
-      echo "and docker prune / volume rm. Plain \`git push\` is NOT blocked -- it is"
-      echo "added to permissions.ask instead, so it asks you every time rather than"
-      echo "ever becoming automatic. Read the script header for the full list and"
-      echo "its limits. Your other settings are left untouched."
+      # Paths go on their own lines: say() folds on spaces, and a long path has
+      # none, so folding it would break mid-path.
+      echo "Install the guardrails hook?"
+      echo "  hook      $hook"
+      echo "  settings  $settings"
+      echo "  event     PreToolUse on Bash"
+      echo
+      say "It refuses destructive commands before they run: force-push, hard reset, forced clean, history rewrites, GitHub repo and API writes, recursive delete of an absolute path, and the docker commands that drop images or volumes."
+      echo
+      say "A plain \`git push\` is NOT blocked. It is added to permissions.ask instead, so it asks you every time rather than ever becoming automatic."
+      echo
+      say "The full list, and the two things this cannot do, are in the header of the script above. Nothing else in your settings is touched."
       local reply=""
       read -r -p "install it? [y/N] " reply || reply=""
       case "$reply" in
@@ -309,11 +322,11 @@ git_rules_step() {
         return 0
       fi
       echo
-      echo "Add these rules to your global git ignore ($file)?"
+      say "Add these rules to your global git ignore ($file)?"
       local rule
       for rule in "${missing[@]}"; do echo "  $rule"; done
-      echo "They keep journals and local Claude settings out of every repo on this"
-      echo "machine, including repos not cloned yet. Nothing else is modified."
+      echo
+      say "They keep journals and local Claude settings out of every repo on this machine, including repos not cloned yet. Nothing else is modified."
       local reply=""
       read -r -p "add them? [y/N] " reply || reply=""
       case "$reply" in
