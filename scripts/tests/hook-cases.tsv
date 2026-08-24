@@ -15,20 +15,20 @@
 2	git reflog expire --expire=now --all
 2	git gc --prune=now
 2	git update-ref -d refs/heads/x
-2	gh repo delete marcandreuf/pickupee
-2	gh repo archive marcandreuf/pickupee
+2	gh repo delete owner/repo
+2	gh repo archive owner/repo
 2	gh release delete v1
-2	gh api -X DELETE repos/marcandreuf/pickupee
-2	gh api repos/marcandreuf/pickupee -X DELETE
-2	gh api -XDELETE repos/marcandreuf/pickupee
+2	gh api -X DELETE repos/owner/repo
+2	gh api repos/owner/repo -X DELETE
+2	gh api -XDELETE repos/owner/repo
 2	gh api repos/x/y/issues -f title=bug
 2	rm -rf /
 2	rm -rf ~/projects
-2	rm -rf /home/dev1/projects/pickupee
+2	rm -rf /home/user/projects/app
 2	rm -fr /var/tmp/x
 2	docker system prune -a
 2	docker prune
-2	docker volume rm pickupee_db
+2	docker volume rm app_db
 2	docker compose down -v
 2	cd /tmp && git push --force
 2	make build; docker system prune -a
@@ -61,7 +61,7 @@
 0	gh repo view
 0	gh pr list
 0	gh issue create --title x
-0	gh api repos/marcandreuf/pickupee
+0	gh api repos/owner/repo
 0	gh api /user
 0	gh run list
 0	rm -rf node_modules
