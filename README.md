@@ -27,7 +27,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 | `morning-terminals.sh` | Opens the morning terminal layout as positioned windows, Claude Code in one repo (X11 only; `--install` on a new machine) |
 | `banner.sh` | Prints a word as a coloured ASCII-art banner |
 | `install-claude.sh` | Wires `commands/` and `skills/` into `~/.claude`, and offers the git ignore rules and the guardrails hook |
-| `block-dangerous-commands.sh` | PreToolUse hook that refuses destructive commands (`git push`, `rm -rf /`, `gh repo delete`, …) |
+| `block-dangerous-commands.sh` | PreToolUse hook that refuses destructive commands (`push --force`, `rm -rf /`, `gh repo delete`, …) |
 | `sync-upstream.sh` | Reports what changed upstream in mattpocock/skills since the last review |
 | `connect-vnc.sh` | Connects to a remote VNC session over an SSH tunnel |
 | `wol-proxmox.sh` | Sends a Wake-on-LAN packet to the Proxmox host |

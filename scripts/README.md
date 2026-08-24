@@ -66,7 +66,9 @@ The commands only instruct the model not to commit a journal; these rules are wh
 
 A `PreToolUse` hook: Claude Code pipes it the pending Bash command as JSON, and it exits 2 to refuse anything destructive. `install-claude.sh` offers to wire it into `~/.claude/settings.json`, machine-wide, pointing at this file so a `git pull` updates the rules.
 
-Blocked: `git push` (all variants), `reset --hard`, `clean -f`, `branch -D`, `checkout .` / `restore .`, history rewrites (`filter-branch`, `reflog expire`, `gc --prune`, `update-ref -d`), `gh repo delete/archive/rename`, `gh api` with a write flag, `rm -rf` on an absolute path or `$HOME`, and `docker prune` / `volume rm` / `compose down -v`.
+Blocked: `git push --force` / `-f` / `--force-with-lease`, `reset --hard`, `clean -f`, `branch -D`, `checkout .` / `restore .`, history rewrites (`filter-branch`, `reflog expire`, `gc --prune`, `update-ref -d`), `gh repo delete/archive/rename`, `gh api` with a write flag, `rm -rf` on an absolute path or `$HOME`, and `docker prune` / `volume rm` / `compose down -v`.
+
+**Plain `git push` is not blocked** — it is ordinary development work, and a wall you have to edit a file to get past is the wrong tool for something you do daily. It gets a confirmation instead: `install-claude.sh` adds `Bash(git push:*)` to `permissions.ask` in `~/.claude/settings.json`, so Claude Code asks every time. The ask rule matters because answering "yes, and don't ask again" to a plain prompt writes an allow rule into `settings.local.json`, and pushes would silently become automatic from then on. Only the force variants are refused outright, since they overwrite remote history.
 
 The point of a hook rather than a `deny` rule in `settings.json` is that permission rules match a command *prefix*, so `Bash(gh api -X:*)` catches `gh api -X DELETE repos/x` and misses `gh api repos/x -X DELETE`, `gh api -XDELETE ...`, and anything inside `bash -c`. A hook is handed the whole string.
 

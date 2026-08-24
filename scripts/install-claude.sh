@@ -59,6 +59,7 @@ git_rules=ask            # ask | yes | no   (overwritten below if flags given)
 hooks=ask                # ask | yes | no
 CLAUDE_DIR="$HOME/.claude"
 HOOK_SCRIPT_NAME=block-dangerous-commands.sh
+ASK_RULES=('Bash(git push:*)')
 # The rules the global install offers to add. Journals are never committed in
 # any repo, and settings.local.json is the file that is supposed to die with
 # the VM; both are per-repo decisions today, which means one forgotten clone
@@ -126,24 +127,29 @@ done
 # permission deny rule cannot: a dangerous flag in a late argument position, or
 # a command wrapped in `bash -c`. The settings entry points at this repo, so the
 # rules update with a `git pull`.
+#
+# It also adds `Bash(git push:*)` to permissions.ask. Plain `git push` is ordinary
+# work, so the hook lets it through -- but "yes, and do not ask again" on a prompt
+# writes an allow rule into settings.local.json, and from then on pushes would run
+# unattended. An ask rule keeps the confirmation in place.
 
 hook_path() { echo "$REPO/scripts/$HOOK_SCRIPT_NAME"; }
 
 hook_present() {
   local settings="$1" hook="$2"
   [[ -f "$settings" ]] || return 1
-  SETTINGS="$settings" HOOK="$hook" python3 -c '
+  SETTINGS="$settings" HOOK="$hook" ASK="$(printf '%s\n' "${ASK_RULES[@]}")" python3 -c '
 import json, os, sys
 try:
     d = json.load(open(os.environ["SETTINGS"]))
 except Exception:
     sys.exit(1)
 want = os.environ["HOOK"]
-for group in d.get("hooks", {}).get("PreToolUse", []):
-    for h in group.get("hooks", []):
-        if want in str(h.get("command", "")):
-            sys.exit(0)
-sys.exit(1)
+hooked = any(want in str(h.get("command", ""))
+             for g in d.get("hooks", {}).get("PreToolUse", [])
+             for h in g.get("hooks", []))
+asked = set(os.environ["ASK"].split("\n")) <= set(d.get("permissions", {}).get("ask", []))
+sys.exit(0 if (hooked and asked) else 1)
 ' 2>/dev/null
 }
 
@@ -152,7 +158,7 @@ sys.exit(1)
 hook_install() {
   local settings="$1" hook="$2"
   mkdir -p "$(dirname "$settings")"
-  SETTINGS="$settings" HOOK="$hook" python3 -c '
+  SETTINGS="$settings" HOOK="$hook" ASK="$(printf '%s\n' "${ASK_RULES[@]}")" python3 -c '
 import json, os
 path, hook = os.environ["SETTINGS"], os.environ["HOOK"]
 try:
@@ -165,17 +171,24 @@ except Exception as e:
 
 pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
 entry = {"type": "command", "command": hook}
-for group in pre:
-    if group.get("matcher") == "Bash":
-        group.setdefault("hooks", []).append(entry)
-        break
-else:
-    pre.append({"matcher": "Bash", "hooks": [entry]})
+if not any(hook in str(h.get("command", "")) for g in pre for h in g.get("hooks", [])):
+    for group in pre:
+        if group.get("matcher") == "Bash":
+            group.setdefault("hooks", []).append(entry)
+            break
+    else:
+        pre.append({"matcher": "Bash", "hooks": [entry]})
+    print("  hooked   PreToolUse:Bash -> " + hook)
+
+ask = data.setdefault("permissions", {}).setdefault("ask", [])
+for rule in os.environ["ASK"].split("\n"):
+    if rule and rule not in ask:
+        ask.append(rule)
+        print("  ask      " + rule)
 
 with open(path, "w") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
-print("  hooked   PreToolUse:Bash -> " + hook)
 print("written to " + path)
 '
 }
@@ -207,8 +220,10 @@ hook_step() {
       echo "  PreToolUse on Bash -> $hook"
       echo "It refuses destructive commands before they run: git push, reset --hard,"
       echo "clean -f, history rewrites, gh repo/api writes, rm -rf on absolute paths,"
-      echo "and docker prune / volume rm. Read the script header for the full list"
-      echo "and its limits. Your other settings are left untouched."
+      echo "and docker prune / volume rm. Plain \`git push\` is NOT blocked -- it is"
+      echo "added to permissions.ask instead, so it asks you every time rather than"
+      echo "ever becoming automatic. Read the script header for the full list and"
+      echo "its limits. Your other settings are left untouched."
       local reply=""
       read -r -p "install it? [y/N] " reply || reply=""
       case "$reply" in
@@ -434,8 +449,8 @@ case "$action" in
     done
     echo "global git rules ($git_ignore_path)"
     if hook_present "$CLAUDE_DIR/settings.json" "$(hook_path)"; then
-      echo "  present  guardrails hook (PreToolUse:Bash)"
+      echo "  present  guardrails hook + git push ask rule"
     else
-      echo "  ABSENT   guardrails hook (PreToolUse:Bash)"
+      echo "  ABSENT   guardrails hook + git push ask rule"
     fi ;;
 esac

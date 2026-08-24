@@ -40,6 +40,11 @@
 # the phrase into a file with the Write tool is unaffected, since this hook
 # only ever sees Bash.
 #
+# PLAIN `git push` IS NOT BLOCKED. It is ordinary work, and Claude Code already
+# asks before running anything that is not on an allow list -- a prompt you can
+# answer is better than a wall you have to edit a file to get past. Only the
+# force variants are refused outright, because they rewrite remote history.
+#
 # ON FAILURE IT BLOCKS. If it cannot parse the payload it exits 2 rather than
 # waving the command through -- a guardrail that fails open is not one.
 
@@ -70,7 +75,7 @@ fi
 # to tell what to do instead.
 PATTERNS=(
   # -- git, from upstream -------------------------------------------------
-  'git[[:space:]]+push|push[[:space:]]+--force|--force-with-lease@@Pushing is the user'"'"'s call. Stop and tell them the branch is ready to push.'
+  'git[[:space:]]+push[[:space:]].*(--force|-f([[:space:]]|$))@@Force-pushing overwrites remote history and can destroy a teammate'"'"'s commits. A plain `git push` is fine and will ask the user first.'
   'git[[:space:]]+reset[[:space:]]+--hard@@Discards uncommitted work with no recovery. Use `git stash` or commit first.'
   'git[[:space:]]+clean[[:space:]]+-[a-z]*f@@Deletes untracked files permanently. Ask the user, or list them with `git clean -n` first.'
   'git[[:space:]]+branch[[:space:]]+-D@@Force-deletes a branch and any unmerged commits on it. Use -d, which refuses when work would be lost.'
