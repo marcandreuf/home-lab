@@ -243,6 +243,29 @@ domain doc layout that the other skills assume.
 This is a precondition, not a step in the flow. A repo that has not had it run
 will have the engineering skills guessing at things they should have been told.
 
+## One repo per session
+
+**One Claude Code session and one editor window per repo.** The session's working
+directory is the repo root — never a parent folder that holds several repos, and
+never a multi-root editor workspace.
+
+This is not a style preference. Everything the flow above depends on is scoped to
+a repo root: the permission allowlist in `.claude/settings.json`, the MCP servers
+in `.mcp.json`, `CLAUDE.md`, the domain docs under `docs/agents/`, the journal
+stream in `.claude/journals/`, and the issue tracker `/setup-matt-pocock-skills`
+configures. Start a session one level up and every one of those breaks in the
+same quiet way: journals land in a directory that belongs to no repo and no
+backup, the allowlist becomes the union of every project underneath, the setup
+skill cannot name a single tracker, and `git status` describes nothing the
+session is actually working on. A wrapper folder does not organise several repos
+— it creates a fourth, unversioned context that outlives the reason it existed.
+
+**Cross-repo context is granted per case, never standing.** When a session
+genuinely needs to see another folder, decide it there and then: name the exact
+path to read, hand over the specific file, or open a second session in that repo
+with its own journal. The rule being retired is the *default* — a parent root
+that silently widens every session, forever, so that one task can see one file.
+
 ## Deviations
 
 Anything we change from upstream goes here with the reason, so a later

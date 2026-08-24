@@ -24,7 +24,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 
 | Script | What it does |
 | ------ | ------------ |
-| `morning-terminals.sh` | Opens the morning workspace as positioned terminal windows (X11 only; `--install` on a new machine) |
+| `morning-terminals.sh` | Opens the morning terminal layout as positioned windows, Claude Code in one repo (X11 only; `--install` on a new machine) |
 | `banner.sh` | Prints a word as a coloured ASCII-art banner |
 | `install-claude.sh` | Wires `commands/` and `skills/` into `~/.claude` |
 | `sync-upstream.sh` | Reports what changed upstream in mattpocock/skills since the last review |
@@ -41,6 +41,13 @@ On a new VM, clone this repo and run `./scripts/install-claude.sh`. That is the 
   - `start-of-day.md` – resume from the latest journal in `.claude/journals/` and verify the repo still matches it
   - `wrap-up.md` – checkpoint the session into a dated journal so the next day can start cold
 - `skills/` – skills, one directory per skill. See [skills/README.md](skills/README.md).
+
+Work one repo per Claude Code session and per editor window — the session's
+working directory is the repo root, never a parent folder holding several repos.
+Permissions, MCP servers, `CLAUDE.md`, domain docs and journals are all scoped to
+a repo root, so a session started above one silently gets the union of everything
+below it. Cross-repo access is granted per case, not as a standing default. See
+[One repo per session](docs/sdlc.md#one-repo-per-session).
 
 ### Working on this repo
 

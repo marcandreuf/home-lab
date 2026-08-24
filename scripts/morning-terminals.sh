@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# morning-terminals.sh - Open the morning workspace as positioned terminals
+# morning-terminals.sh - Open the morning terminal layout as positioned windows
 #
 # Usage:
 #   ./morning-terminals.sh [--banner TEXT] [PROJECT] [BANNER...]
@@ -15,9 +15,12 @@
 # PROJECT selects the directory Claude Code starts in, so the same script works
 # on every VM. A bare name is looked up under ~/projects (foo -> ~/projects/foo);
 # anything containing a slash is used as the path itself, absolute or relative
-# to $HOME (work/foo -> ~/work/foo). With no PROJECT the window opens in
-# ~/projects itself, which is the right starting point when the VM has several
-# and you have not picked one yet. BANNER is the text of the banner window and
+# to $HOME (work/foo -> ~/work/foo). Pass one repo: a Claude Code session is
+# scoped to a single repo root (docs/sdlc.md, "One repo per session"), and
+# starting it above one gives that session the union of everything below.
+# With no PROJECT the window opens in ~/projects itself, which is a place to
+# pick from, not a place to work -- restart it inside the repo before starting
+# a session. BANNER is the text of the banner window and
 # defaults to the directory name in upper case, so pass it when you want
 # different wording or spacing. Because the positional BANNER only follows a
 # PROJECT, use --banner TEXT to set it while keeping the default project
@@ -98,7 +101,7 @@ usage() {
   default_banner="${default_banner^^}"
 
   cat <<EOF
-morning-terminals.sh - Open the morning workspace as positioned terminals
+morning-terminals.sh - Open the morning terminal layout as positioned windows
 
 Usage:
   $0 [--banner TEXT] [PROJECT] [BANNER...]
@@ -107,9 +110,10 @@ Usage:
   $0 --check [PROJECT]       Report requirement status, install nothing
   $0 --help                  Show usage
 
-PROJECT is the directory Claude Code starts in, defaulting to $PROJECTS_DIR
-when omitted. A bare name resolves under $PROJECTS_DIR; a value with a slash
-is the path itself, absolute or relative to \$HOME.
+PROJECT is the repo Claude Code starts in, defaulting to $PROJECTS_DIR when
+omitted. A bare name resolves under $PROJECTS_DIR; a value with a slash is the
+path itself, absolute or relative to \$HOME. A session belongs to one repo, so
+the default is a place to pick from rather than one to work in.
 BANNER is the banner window's text (default: the directory name upper-cased).
 --banner TEXT sets the same thing without a PROJECT in front of it, which is
 the only way to word the banner while keeping the default project directory.
