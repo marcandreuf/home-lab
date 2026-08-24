@@ -72,7 +72,11 @@ Blocked: `git push --force` / `-f` / `--force-with-lease`, `reset --hard`, `clea
 
 The point of a hook rather than a `deny` rule in `settings.json` is that permission rules match a command *prefix*, so `Bash(gh api -X:*)` catches `gh api -X DELETE repos/x` and misses `gh api repos/x -X DELETE`, `gh api -XDELETE ...`, and anything inside `bash -c`. A hook is handed the whole string.
 
-Two limits, both deliberate. It matches text, so `eval` and base64 go around it — a guardrail, not a sandbox. And it matches anywhere in the line, which is what catches `cd /tmp && git push`, at the price of also blocking a command that merely mentions a blocked phrase (`echo 'git push is what I would do'`). Anchoring would fix that and lose the `bash -c` case, which is the worse miss.
+Patterns match only at a **command position**: the start of a line, or straight after `;`, `&`, `|`, `(`, `{`, a backtick, `$(`, or one of the wrappers whose argument is itself a command (`-c`, `eval`, `sudo`, `nohup`, `time`, `xargs`). One optional quote may follow, which is what catches `bash -c 'gh api -X DELETE ...'`. A quote on its own is not a command position, so writing *about* one of these commands is fine — `echo 'git push --force is what I would do'` runs, and so does a heredoc documenting this very file. The first version matched anywhere in the line and refused its own documentation on day one.
+
+It still matches text, so a command assembled at run time — base64, variable indirection — goes around it. A guardrail, not a sandbox. The other gap is a wrapper not in that list; add it to `CMD_POS` when one turns up.
+
+`tests/run-hook-cases.sh` is the regression suite: 79 cases pairing each refusal with the ordinary command it could be confused with. Run it after touching the patterns or `CMD_POS`.
 
 Ported from upstream's `misc/git-guardrails-claude-code` and widened past git; see the Deviations section of [../docs/sdlc.md](../docs/sdlc.md).
 

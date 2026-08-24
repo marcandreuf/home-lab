@@ -26,19 +26,20 @@
 # WHAT THIS IS NOT
 #
 # Pattern matching over text, so it stops a careless command, not a determined
-# one: `eval`, base64, and variable indirection all go around it. Treat it as a
-# guardrail, not a sandbox.
+# one: base64, variable indirection, and anything that assembles a command at run
+# time all go around it. Treat it as a guardrail, not a sandbox.
 #
-# It also matches anywhere in the line, which is deliberate -- that is what
-# catches `cd /tmp && git push` and `bash -c '...'` -- and the price is that a
-# command merely MENTIONING a blocked phrase is blocked too:
+# Matching only at a command position (see CMD_POS below) is what keeps writing
+# about these commands legal:
 #
-#   echo 'git push is what I would do'    <- blocked
+#   echo 'git push --force is what I would do'   <- allowed, it is an argument
+#   cd /tmp && git push --force                  <- blocked, it is a command
+#   bash -c 'gh api -X DELETE repos/x'           <- blocked, -c takes a command
 #
-# Anchoring the patterns to a command boundary would fix that and lose the
-# `bash -c` case, which is the more expensive miss. Rephrase instead; writing
-# the phrase into a file with the Write tool is unaffected, since this hook
-# only ever sees Bash.
+# The residual gap is a wrapper this does not know about: a command reached
+# through something other than `;` `&` `|` `(` `{` backtick `$(` `-c` `eval`
+# `sudo` `nohup` `time` `xargs` is not seen as a command. Add to CMD_POS when one
+# shows up.
 #
 # PLAIN `git push` IS NOT BLOCKED. It is ordinary work, and Claude Code already
 # asks before running anything that is not on an allow list -- a prompt you can
@@ -68,11 +69,31 @@ fi
 # An empty command is not a Bash call this hook has anything to say about.
 [[ -z "$COMMAND" ]] && exit 0
 
-# Each entry is "regex@@explanation" -- @@ rather than | because the regexes
-# use | for alternation. The regex is matched with grep -E against
-# the whole command line, so argument order and `bash -c` wrapping do not hide
-# anything. Keep the explanation specific: the model reads it and should be able
-# to tell what to do instead.
+# Every pattern below is anchored to a COMMAND POSITION: the start of a line, or
+# just after something that begins a new command. Without this the hook matches a
+# dangerous phrase anywhere in the line, so writing ABOUT one of these commands --
+# quoting it in an echo, or in a heredoc that documents this very file -- gets
+# refused. That happened on day one.
+#
+# The set below is what actually introduces a command:
+#
+#   ^          start of a line (a multi-line command gives one per line)
+#   ; & |      separators, which covers && and || as single characters
+#   ( { `      subshells, groups, and old-style substitution
+#   $(         command substitution
+#   -c         `bash -c`, `sh -c` -- the flag whose argument IS a command
+#   eval       ditto, and the classic way round a text matcher
+#   sudo nohup time xargs   wrappers that run the rest as a command
+#
+# A quote may follow any of those (`bash -c 'rm ...'`), so one optional quote is
+# allowed before the pattern. A quote alone is NOT a command position, which is
+# exactly what keeps `echo 'git push ...'` legal.
+CMD_POS='(^|[;&|`({]|\$\(|\b(eval|sudo|nohup|time|xargs)[[:space:]]|-c[[:space:]])[[:space:]]*['"'"'"]?[[:space:]]*'
+
+# Each entry is "regex@@explanation" -- @@ rather than | because the regexes use
+# | for alternation. Every regex must start with the command name, since CMD_POS
+# is prepended to it. Keep the explanation specific: the model reads it and
+# should be able to tell what to do instead.
 PATTERNS=(
   # -- git, from upstream -------------------------------------------------
   'git[[:space:]]+push[[:space:]].*(--force|-f([[:space:]]|$))@@Force-pushing overwrites remote history and can destroy a teammate'"'"'s commits. A plain `git push` is fine and will ask the user first.'
@@ -104,7 +125,7 @@ PATTERNS=(
 for entry in "${PATTERNS[@]}"; do
   regex="${entry%%@@*}"
   reason="${entry#*@@}"
-  if printf '%s' "$COMMAND" | grep -qE -- "$regex"; then
+  if printf '%s' "$COMMAND" | grep -qE -- "$CMD_POS$regex"; then
     echo "BLOCKED by home-lab guardrails: $reason" >&2
     echo "Command: $COMMAND" >&2
     echo "The user has withheld this command. Do not try to work around it -- say what you wanted to run and why." >&2

@@ -1,0 +1,83 @@
+# Cases for scripts/block-dangerous-commands.sh, run by run-hook-cases.sh.
+# Format: expected-exit <TAB> command.  2 = refused, 0 = allowed.
+# Lines starting with # are ignored. Add a case for every pattern you add, and
+# an allowed case for the ordinary command it could be confused with.
+2	git push --force
+2	git push -f origin main
+2	git push origin main --force
+2	git push --force-with-lease
+2	git reset --hard HEAD~1
+2	git clean -fd
+2	git branch -D feature
+2	git checkout .
+2	git restore .
+2	git filter-branch --all
+2	git reflog expire --expire=now --all
+2	git gc --prune=now
+2	git update-ref -d refs/heads/x
+2	gh repo delete marcandreuf/pickupee
+2	gh repo archive marcandreuf/pickupee
+2	gh release delete v1
+2	gh api -X DELETE repos/marcandreuf/pickupee
+2	gh api repos/marcandreuf/pickupee -X DELETE
+2	gh api -XDELETE repos/marcandreuf/pickupee
+2	gh api repos/x/y/issues -f title=bug
+2	rm -rf /
+2	rm -rf ~/projects
+2	rm -rf /home/dev1/projects/pickupee
+2	rm -fr /var/tmp/x
+2	docker system prune -a
+2	docker prune
+2	docker volume rm pickupee_db
+2	docker compose down -v
+2	cd /tmp && git push --force
+2	make build; docker system prune -a
+2	true || rm -rf /var
+2	bash -c 'gh api -X DELETE repos/x/y'
+2	sh -c "git reset --hard"
+2	sudo rm -rf /etc/nginx
+2	eval 'git reset --hard'
+2	(cd /tmp && git clean -fd)
+2	echo x | xargs rm -rf /tmp/y
+2	nohup docker system prune -a
+0	git push
+0	git push origin main
+0	git push -u origin feature
+0	git push --tags
+0	git status
+0	git log --oneline -5
+0	git diff --stat
+0	git add -A
+0	git commit -m fix
+0	git checkout -b feature
+0	git checkout main
+0	git restore --staged file.py
+0	git branch -d merged
+0	git clean -n
+0	git reset HEAD~1
+0	git stash
+0	git pull
+0	git fetch
+0	gh repo view
+0	gh pr list
+0	gh issue create --title x
+0	gh api repos/marcandreuf/pickupee
+0	gh api /user
+0	gh run list
+0	rm -rf node_modules
+0	rm -rf ./build
+0	rm -rf dist
+0	rm file.txt
+0	rm -r tmpdir
+0	docker ps
+0	docker compose up -d
+0	docker compose down
+0	docker build -t x .
+0	docker images
+0	./scripts/run_tests.sh
+0	npm test
+0	echo 'git push --force is what I would do'
+0	grep -n 'git reset --hard' notes.md
+0	printf 'the docs mention docker system prune here'
+0	cat docs/rm -rf.md
+0	sed -i s/x/y/ file.md
