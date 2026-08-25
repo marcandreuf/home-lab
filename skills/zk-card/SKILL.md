@@ -48,17 +48,42 @@ This is the step the skill exists for. Both directions are in scope:
 - **Outbound**: cards this card should point to.
 - **Inbound**: cards that should gain a bullet pointing back here.
 
-**Gather candidates** by three signals, widest first:
+**Cast a wide net** first, to reach the corpus cheaply:
 
-- shared `keywords:` entries in frontmatter
+- shared `keywords:` entries in frontmatter, **weighted by rarity**
 - two-hop neighbours: cards linked from the cards this one already links
 - full-text matches on the card's distinctive terms
 
-**Then read them.** A keyword collision is not a meaningful link, and a shortlist of
-eight cards you have actually opened beats thirty you pattern-matched. Rank what
-survives; state how many candidates you dropped so the user can ask for more.
+Rarity does the work that a stoplist would otherwise have to. A tag carried by a large
+share of the corpus is close to noise; a tag shared by two or three cards is nearly an
+identifier. Weighting by it drops format tags (`living-document`, `draft`, `wip`) on
+their own, in any repo, with nothing to configure or keep current.
 
-**Propose, with the annotation drafted.** The user is approving sentences, not ids:
+**Then judge by relation, not by similarity.** Lexical overlap finds cards on the same
+subject, which is a weak proxy for a link worth writing: two cards can share every term
+and stand in no relation, while the strongest edge in a Zettelkasten often crosses
+subjects entirely.
+
+Learn the vocabulary from the repo rather than importing one. Read a sample of the
+existing `* [[ID]] Title (annotation)` bullets: the annotations record the relations
+this author actually writes. Expect verbs over topics — _corrects_, _supersedes_,
+_supplies evidence for_, _gates_, _resolves an open question in_, _is the case that_.
+
+Now test each survivor by asking which named relation holds, and **drop the candidate
+when none does**, however similar it looked. Two consequences worth expecting:
+
+- Hub cards (dashboards, indexes, checklists) win every similarity contest because they
+  touch everything, and carry the least meaning per edge. The relation test is what
+  rejects them.
+- A card that shares almost no vocabulary can be the strongest link on the list, when it
+  corrects the method the new card rests on or resolves the question it opens.
+
+**Then read the survivors in full.** A shortlist of eight cards you have actually opened
+beats thirty you pattern-matched. Rank what remains; state how many candidates you
+dropped so the user can ask for more.
+
+**Propose, with the annotation drafted.** Name the relation and the sentence is most of
+the way written. The user is approving sentences, not ids:
 
 ```
 1.  ->  [[20240115093000]] Retry Budgets in Queue Consumers
