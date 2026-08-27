@@ -14,6 +14,10 @@
 # The cases live in a data file rather than in this script on purpose. They look
 # like commands because they ARE commands, so a case written inline would be a
 # command position in this file, and the hook would refuse the test run itself.
+#
+# A literal \n in a case becomes a newline, because the heredoc cases need more
+# than one line and the file is one case per line. Nothing else is unescaped:
+# a tab cannot appear in a command, since a tab is the field separator.
 
 set -uo pipefail
 
@@ -33,7 +37,7 @@ pass=0; fail=0
 
 while IFS=$'\t' read -r want cmd; do
   [[ -z "$cmd" || "$want" == \#* ]] && continue
-  payload="$(CMD="$cmd" python3 -c 'import json,os;print(json.dumps({"tool_input":{"command":os.environ["CMD"]}}))')"
+  payload="$(CMD="$cmd" python3 -c 'import json,os;print(json.dumps({"tool_input":{"command":os.environ["CMD"].replace("\\n","\n")}}))')"
   printf '%s' "$payload" | "$HOOK" >/dev/null 2>&1
   got=$?
   if [[ "$got" == "$want" ]]; then

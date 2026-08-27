@@ -41,6 +41,11 @@
 # `sudo` `nohup` `time` `xargs` is not seen as a command. Add to CMD_POS when one
 # shows up.
 #
+# A QUOTED HEREDOC BODY IS NOT SCANNED (see the stripping step below). Writing a
+# file is not running one, and command position alone could not tell the two
+# apart: every body line starts at a line start, and a markdown backtick around
+# a quoted command reads as old-style substitution. Both refused real work here.
+#
 # PLAIN `git push` IS NOT BLOCKED. It is ordinary work, and Claude Code already
 # asks before running anything that is not on an allow list -- a prompt you can
 # answer is better than a wall you have to edit a file to get past. Only the
@@ -68,6 +73,49 @@ fi
 
 # An empty command is not a Bash call this hook has anything to say about.
 [[ -z "$COMMAND" ]] && exit 0
+
+# A QUOTED heredoc body -- <<'EOF', <<"EOF", <<\EOF and the <<- forms -- is
+# literal text. The shell expands nothing inside it, so nothing in there can
+# ever run: it is content on its way to a file. Drop it before matching, or
+# writing a Dockerfile or a document that MENTIONS one of the patterns below
+# gets refused. Both ways that happens are invisible to CMD_POS on its own:
+# a body line starts at a line start, and `rm -rf /x` in markdown backticks
+# looks exactly like old-style command substitution.
+#
+# An UNQUOTED heredoc (<<EOF) still expands $(...) and backticks, so its body
+# stays in the scan. Heredoc openers are not looked for while inside a body
+# either, so a body cannot open a fake one to hide the rest of the line behind.
+# Anything after the terminator is ordinary command text and is scanned.
+#
+# If a terminator never arrives -- an unterminated heredoc, or a `<<` that was
+# never a heredoc at all -- awk exits 3 and the whole command is scanned as
+# written. That is the same choice as the rest of this file: fail closed.
+SCANNED="$(printf '%s\n' "$COMMAND" | awk -v SQ="'" '
+  BEGIN { pend = 0; dash = 0; drop = 0; delim = "" }
+  pend {
+    line = $0
+    if (dash) sub(/^\t+/, "", line)
+    if (line == delim) { pend = 0; print; next }
+    if (!drop) print
+    next
+  }
+  {
+    print
+    if (match($0, "<<-?[ \t]*(" SQ "[^" SQ "]*" SQ "|\"[^\"]*\"|\\\\?[A-Za-z_][A-Za-z0-9_]*)")) {
+      tok = substr($0, RSTART, RLENGTH)
+      dash = (substr(tok, 3, 1) == "-")
+      sub("^<<-?[ \t]*", "", tok)
+      first = substr(tok, 1, 1)
+      drop = (first == SQ || first == "\"" || first == "\\")
+      if (first == "\\") tok = substr(tok, 2)
+      else if (drop) tok = substr(tok, 2, length(tok) - 2)
+      delim = tok
+      pend = 1
+    }
+  }
+  END { if (pend) exit 3 }
+')"
+[[ $? -eq 0 ]] || SCANNED="$COMMAND"
 
 # Every pattern below is anchored to a COMMAND POSITION: the start of a line, or
 # just after something that begins a new command. Without this the hook matches a
@@ -125,7 +173,7 @@ PATTERNS=(
 for entry in "${PATTERNS[@]}"; do
   regex="${entry%%@@*}"
   reason="${entry#*@@}"
-  if printf '%s' "$COMMAND" | grep -qE -- "$CMD_POS$regex"; then
+  if printf '%s' "$SCANNED" | grep -qE -- "$CMD_POS$regex"; then
     echo "BLOCKED by home-lab guardrails: $reason" >&2
     echo "Command: $COMMAND" >&2
     echo "The user has withheld this command. Do not try to work around it -- say what you wanted to run and why." >&2

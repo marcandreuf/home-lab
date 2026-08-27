@@ -81,3 +81,16 @@
 0	printf 'the docs mention docker system prune here'
 0	cat docs/rm -rf.md
 0	sed -i s/x/y/ file.md
+
+# Heredocs. A quoted body is content on its way to a file and is not scanned;
+# an unquoted body still expands, so it is. \n is a newline (see the runner).
+0	cat > notes.md <<'EOF'\ngit push --force is what I would do\nEOF
+0	cat > Dockerfile <<'EOF'\nrm -rf /var/lib/apt/lists/*\nEOF
+0	cat > doc.md <<'EOF'\nthe `rm -rf /var/lib/apt/lists/*` line is content\nEOF
+0	cat > doc.md <<"EOF"\ndocker system prune -a in prose\nEOF
+0	cat > doc.md <<\EOF\ngit reset --hard in prose\nEOF
+0	cat > f.sh <<-'EOF'\nrm -rf /etc/nginx\nEOF
+2	cat > f.md <<EOF\n$(git reset --hard)\nEOF
+2	cat > f.md <<'EOF'\ntext\nEOF\ndocker system prune -a
+2	cat > f.md <<'EOF'\ngit push --force
+0	git status\ngit log --oneline -5
