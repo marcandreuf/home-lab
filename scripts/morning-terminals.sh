@@ -40,7 +40,7 @@
 #           +X+Y offsets are ignored. Sizes still apply, so you get correctly
 #           sized windows piled wherever the compositor puts them.
 #         - xdotool is an X11 client and cannot see or activate native Wayland
-#           windows, so focus_window just times out.
+#           windows, so focus_new_window just times out.
 #       Fix: at the login screen, use the gear menu and pick "Ubuntu on Xorg".
 #
 #   xdotool (required, not installed by default)      --install handles this
@@ -130,10 +130,10 @@ See the comment header in this file for the full requirements list.
 EOF
 }
 
-# Turn the PROJECT argument into a directory, a name to match windows on, and
-# the banner text. Remaining arguments are the banner text verbatim, so it can
-# contain spaces without the caller quoting it. --banner wins over both, so it
-# can override the default without naming a project.
+# Turn the PROJECT argument into a directory and the banner text. Remaining
+# arguments are the banner text verbatim, so it can contain spaces without the
+# caller quoting it. --banner wins over both, so it can override the default
+# without naming a project.
 resolve_project() {
   local project="${1:-}"
   shift || true
@@ -312,11 +312,19 @@ launch() {
   sleep 0.4
 }
 
-# Raise and focus the first window whose title matches $1, once it shows up.
-# Note: bash's PS1 overwrites --title with "user@host: dir", so match on the
-# working directory rather than the title passed to launch().
-focus_window() {
-  local pattern="$1" tries=40 id name
+# Raise the terminal window that appeared after $1, a newline-separated list of
+# window ids captured before the launch.
+#
+# Identifying it by title does not work: claude replaces the title with its own
+# ("Claude Code") as soon as it starts, overwriting both --title and the
+# "user@host: dir" that PS1 would otherwise set, and the caller normally
+# already has such a window open. Nor does the pid: every window on the desktop
+# belongs to the single gnome-terminal-server process.
+#
+# --onlyvisible because the server also owns a couple of unmapped helper
+# windows that answer to the same class.
+focus_new_window() {
+  local before="$1" tries=40 id
 
   if ! command -v xdotool &>/dev/null; then
     echo "xdotool not installed, leaving window stacking to the WM" >&2
@@ -325,19 +333,15 @@ focus_window() {
   fi
 
   while (( tries-- > 0 )); do
-    # Filter by title here rather than with `xdotool search --all --class
-    # --name`, which matches nothing even when each criterion matches alone.
     while read -r id; do
-      name=$(xdotool getwindowname "$id" 2>/dev/null)
-      if [[ "$name" == *"$pattern"* ]] && xdotool windowactivate "$id" 2>/dev/null; then
-        return 0
-      fi
-    done < <(xdotool search --class "Gnome-terminal" 2>/dev/null)
+      grep -qx "$id" <<<"$before" && continue
+      xdotool windowactivate "$id" 2>/dev/null && return 0
+    done < <(xdotool search --onlyvisible --class "Gnome-terminal" 2>/dev/null)
 
     sleep 0.25
   done
 
-  echo "could not focus a terminal window matching '$pattern'" >&2
+  echo "could not focus the Claude Code window" >&2
   return 1
 }
 
@@ -359,8 +363,10 @@ open_terminals() {
     "$(printf '%q' "$BANNER_SH") $(printf '%q' "$BANNER_TEXT")"
 
   # Claude Code -- launched last and raised, so it ends up on top
+  local before
+  before=$(xdotool search --onlyvisible --class "Gnome-terminal" 2>/dev/null)
   launch "145x40+400+0" "CC" "cd $(printf '%q' "$PROJECT_DIR") && claude"
-  focus_window "$PROJECT_NAME"
+  focus_new_window "$before"
 }
 
 # A loop rather than a single case, so --banner can be combined with the other

@@ -8,7 +8,6 @@
 2	git push --force-with-lease
 2	git reset --hard HEAD~1
 2	git clean -fd
-2	git branch -D feature
 2	git checkout .
 2	git restore .
 2	git filter-branch --all
@@ -81,6 +80,18 @@
 0	printf 'the docs mention docker system prune here'
 0	cat docs/rm -rf.md
 0	sed -i s/x/y/ file.md
+#
+# -- ASK_PATTERNS: prompted rather than refused ------------------------------
+# `ask` means exit 0 plus a permissionDecision on stdout: the user gets the
+# normal approval prompt. A refusal still wins when a command trips both lists.
+ask	git branch -D feature
+ask	git branch -D docs/some-branch docs/another
+ask	cd /tmp/repo && git branch -D feature
+2	git branch -D feature; rm -rf /tmp/x
+2	git branch -D feature && docker volume rm db
+2	git reset --hard; git branch -D feature
+0	echo 'git branch -D feature is what I would run'
+0	grep -n 'git branch -D' notes.md
 
 # Heredocs. A quoted body is content on its way to a file and is not scanned;
 # an unquoted body still expands, so it is. \n is a newline (see the runner).
@@ -94,3 +105,9 @@
 2	cat > f.md <<'EOF'\ntext\nEOF\ndocker system prune -a
 2	cat > f.md <<'EOF'\ngit push --force
 0	git status\ngit log --oneline -5
+
+# Where the two tiers meet: the ask list must be heredoc-stripped too, or
+# writing a document that mentions a force branch delete would prompt. This
+# case fails if the ASK_PATTERNS loop scans $COMMAND instead of $SCANNED.
+0	cat > doc.md <<'EOF'\ngit branch -D feature is content, not a command\nEOF
+ask	cat > doc.md <<EOF\ntext\nEOF\ngit branch -D feature
