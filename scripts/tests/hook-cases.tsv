@@ -8,7 +8,6 @@
 2	git push --force-with-lease
 2	git reset --hard HEAD~1
 2	git clean -fd
-2	git branch -D feature
 2	git checkout .
 2	git restore .
 2	git filter-branch --all
@@ -81,3 +80,15 @@
 0	printf 'the docs mention docker system prune here'
 0	cat docs/rm -rf.md
 0	sed -i s/x/y/ file.md
+#
+# -- ASK_PATTERNS: prompted rather than refused ------------------------------
+# `ask` means exit 0 plus a permissionDecision on stdout: the user gets the
+# normal approval prompt. A refusal still wins when a command trips both lists.
+ask	git branch -D feature
+ask	git branch -D docs/some-branch docs/another
+ask	cd /tmp/repo && git branch -D feature
+2	git branch -D feature; rm -rf /tmp/x
+2	git branch -D feature && docker volume rm db
+2	git reset --hard; git branch -D feature
+0	echo 'git branch -D feature is what I would run'
+0	grep -n 'git branch -D' notes.md

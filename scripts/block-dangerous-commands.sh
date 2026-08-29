@@ -46,6 +46,14 @@
 # answer is better than a wall you have to edit a file to get past. Only the
 # force variants are refused outright, because they rewrite remote history.
 #
+# THERE ARE TWO ANSWERS, NOT ONE. PATTERNS refuses (exit 2, no prompt offered).
+# ASK_PATTERNS returns a "ask" permission decision, which routes the call to the
+# normal approval prompt. The second tier is for commands that are destructive
+# but sometimes correct, where refusing outright leaves no way through except
+# editing this file. Refusals are checked first, so a command tripping both gets
+# the stricter answer. Put a rule in ASK_PATTERNS only when a human looking at
+# the command could reasonably say yes; everything else belongs in PATTERNS.
+#
 # ON FAILURE IT BLOCKS. If it cannot parse the payload it exits 2 rather than
 # waving the command through -- a guardrail that fails open is not one.
 
@@ -99,7 +107,7 @@ PATTERNS=(
   'git[[:space:]]+push[[:space:]].*(--force|-f([[:space:]]|$))@@Force-pushing overwrites remote history and can destroy a teammate'"'"'s commits. A plain `git push` is fine and will ask the user first.'
   'git[[:space:]]+reset[[:space:]]+--hard@@Discards uncommitted work with no recovery. Use `git stash` or commit first.'
   'git[[:space:]]+clean[[:space:]]+-[a-z]*f@@Deletes untracked files permanently. Ask the user, or list them with `git clean -n` first.'
-  'git[[:space:]]+branch[[:space:]]+-D@@Force-deletes a branch and any unmerged commits on it. Use -d, which refuses when work would be lost.'
+  # `git branch -D` moved to ASK_PATTERNS -- see the note there.
   'git[[:space:]]+(checkout|restore)[[:space:]]+\.@@Throws away every uncommitted change in the tree.'
 
   # -- git history rewrites -----------------------------------------------
@@ -122,6 +130,40 @@ PATTERNS=(
   'docker[[:space:]]+compose[[:space:]]+down[[:space:]]+.*(-v|--volumes)@@`down -v` drops the volumes, taking the database with them.'
 )
 
+# ASK, not refuse. Same format as PATTERNS, different answer: instead of exiting
+# 2 the hook returns a permission decision of "ask", which routes the call to
+# Claude Code's ordinary approval prompt. The user sees the command and the
+# reason and decides.
+#
+# This tier exists for commands that are destructive but sometimes correct, and
+# where the safe alternative can refuse for reasons that are not about safety.
+# `git branch -D` is the case that prompted it: `-d` rejects a branch whose
+# commits are unreachable from HEAD, which includes every branch whose work
+# landed by squash merge or rebase. The content shipped, the SHAs did not, and
+# `-d` cannot tell that apart from genuinely unreviewed work. Refusing outright
+# left no way through except editing this file -- the wall the header argues
+# against. A prompt puts the judgement where it belongs, and keeps the case this
+# is really guarding against (a branch whose work exists nowhere else) in front
+# of a human rather than silently allowed.
+ASK_PATTERNS=(
+  'git[[:space:]]+branch[[:space:]]+-D@@Force-deletes a branch and any unmerged commits on it. `-d` is the safe form, but it also refuses branches whose work landed by squash merge or rebase, so `-D` is sometimes the only way through. Check that the work exists somewhere else first.'
+)
+
+# Claude Code reads a PreToolUse permission decision as JSON on stdout. Exit 2
+# (the refusal path below) is the harder answer: no prompt is offered at all.
+emit_ask() {
+  local reason="$1" escaped
+  if command -v jq >/dev/null 2>&1; then
+    escaped="$(printf '%s' "$reason" | jq -Rs .)"
+  else
+    escaped="$(REASON="$reason" python3 -c 'import json,os;print(json.dumps(os.environ["REASON"]))')"
+  fi
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":%s}}\n' "$escaped"
+  exit 0
+}
+
+# Refusals are checked first, so a command that trips both answers to the
+# stricter one: `git branch -D x && rm -rf /` is refused, not merely asked.
 for entry in "${PATTERNS[@]}"; do
   regex="${entry%%@@*}"
   reason="${entry#*@@}"
@@ -130,6 +172,14 @@ for entry in "${PATTERNS[@]}"; do
     echo "Command: $COMMAND" >&2
     echo "The user has withheld this command. Do not try to work around it -- say what you wanted to run and why." >&2
     exit 2
+  fi
+done
+
+for entry in "${ASK_PATTERNS[@]}"; do
+  regex="${entry%%@@*}"
+  reason="${entry#*@@}"
+  if printf '%s' "$COMMAND" | grep -qE -- "$CMD_POS$regex"; then
+    emit_ask "home-lab guardrails: $reason"
   fi
 done
 
