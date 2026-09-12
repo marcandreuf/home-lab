@@ -26,9 +26,11 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 | ------ | ------------ |
 | `morning-terminals.sh` | Opens the morning terminal layout as positioned windows, Claude Code in one repo (X11 only; `--install` on a new machine) |
 | `banner.sh` | Prints a word as a coloured ASCII-art banner |
-| `install-claude.sh` | Wires `commands/` and `skills/` into `~/.claude`, and offers the git ignore rules and the guardrails hook |
+| `install-claude.sh` | Wires `commands/` and `skills/` into `~/.claude`, and offers the git ignore rules, the guardrails hook and the status line |
 | `block-dangerous-commands.sh` | PreToolUse hook that refuses destructive commands (`push --force`, `rm -rf /`, `gh repo delete`, …) |
-| `tests/run-hook-cases.sh` | Regression suite for the guardrails hook (79 cases) |
+| `statusline.sh` | Status line token counter: context window used, the 5-hour and weekly limits, git branch |
+| `tests/run-hook-cases.sh` | Regression suite for the guardrails hook (98 cases) |
+| `tests/run-statusline-cases.sh` | Regression suite for the status line (21 cases, both JSON readers) |
 | `sync-upstream.sh` | Reports what changed upstream in mattpocock/skills since the last review |
 | `connect-vnc.sh` | Connects to a remote VNC session over an SSH tunnel |
 | `wol-proxmox.sh` | Sends a Wake-on-LAN packet to the Proxmox host |
@@ -43,6 +45,7 @@ On a new VM, clone this repo and run `./scripts/install-claude.sh`. That is the 
   - `start-of-day.md` – resume from the latest journal in `.claude/journals/` and verify the repo still matches it
   - `wrap-up.md` – checkpoint the session into a dated journal so the next day can start cold
 - `skills/` – skills, one directory per skill. See [skills/README.md](skills/README.md).
+- `scripts/statusline.sh` – the status line, offered by the same install. It puts a live token counter in the row above the footer: how much of the context window is gone, how much of the rolling 5-hour limit is spent and when it resets, the weekly cap, and the git branch. Every segment hides itself when Claude Code is not sending that data, so it degrades to a plain context counter on a metered API key rather than showing empty fields.
 
 Work one repo per Claude Code session and per editor window — the session's working directory is the repo root, never a parent folder holding several repos. Permissions, MCP servers, `CLAUDE.md`, domain docs and journals are all scoped to a repo root, so a session started above one silently gets the union of everything below it. Cross-repo access is granted per case, not as a standing default. See [One repo per session](docs/sdlc.md#one-repo-per-session).
 

@@ -53,7 +53,7 @@ That is separate from a session being scoped to one repo ([One repo per session]
 
 `--project`, `--workspace` and `--copy` are still recognised and exit with that explanation rather than doing something surprising.
 
-A global install then **offers** two machine-wide changes, each asked for separately and each skippable. First, the guardrails hook in `~/.claude/settings.json` (`--hooks` / `--no-hooks`), described above. Second, two rules in the global git ignore file (`--git-rules` / `--no-git-rules`):
+A global install then **offers** three machine-wide changes, each asked for separately and each skippable. First, the guardrails hook in `~/.claude/settings.json` (`--hooks` / `--no-hooks`), described above. Second, the token counter status line in the same file (`--statusline` / `--no-statusline`), described below: the prompt renders a live sample line rather than describing one, which doubles as a check that the script runs on this machine. An existing `statusLine` pointing somewhere else is reported and left alone, the same way a real file at a symlink path is, and `--force` replaces it. Third, two rules in the global git ignore file (`--git-rules` / `--no-git-rules`):
 
 ```
 **/.claude/journals/
@@ -76,9 +76,36 @@ Patterns match only at a **command position**: the start of a line, or straight 
 
 It still matches text, so a command assembled at run time — base64, variable indirection — goes around it. A guardrail, not a sandbox. The other gap is a wrapper not in that list; add it to `CMD_POS` when one turns up.
 
-`tests/run-hook-cases.sh` is the regression suite: 79 cases pairing each refusal with the ordinary command it could be confused with. Run it after touching the patterns or `CMD_POS`.
+`tests/run-hook-cases.sh` is the regression suite: 98 cases pairing each refusal with the ordinary command it could be confused with. Run it after touching the patterns or `CMD_POS`.
 
 Ported from upstream's `misc/git-guardrails-claude-code` and widened past git; see the Deviations section of [../docs/sdlc.md](../docs/sdlc.md).
+
+### `statusline.sh`
+
+The Claude Code status line: a token counter in the row above the footer. Claude Code pipes it the session's JSON on stdin and prints whatever it writes. `install-claude.sh` offers to wire it into `~/.claude/settings.json`, machine-wide, pointing at this file so a `git pull` updates it.
+
+```
+Opus | home-lab | main* | ██░░░ 34% 68k/200k | 5h 24% 1h47m | 7d 41%
+```
+
+Left to right: the model, the directory, the git branch with `*` when tracked files are dirty, a short bar with the percentage of the context window used and the token counts against the real window size (200k, or 1M on an extended-context model), the rolling 5-hour limit with a countdown to its reset, and the weekly cap.
+
+```sh
+./scripts/statusline.sh --demo             # render a sample line
+echo "$json" | ./scripts/statusline.sh     # render from a session blob
+```
+
+**Every segment is optional, and that is the whole difficulty.** `rate_limits` exists only for Claude.ai Pro and Max subscribers, only after the first API response of a session, and Claude Code drops each window from the JSON once that window's `resets_at` has passed. On a metered API key it never appears at all and the `5h` and `7d` segments simply do not render. `used_percentage` is null early in a session and again after `/compact`. The branch is absent outside a repo. So the script renders what it has and stays quiet about the rest, and `0%` is carefully not treated as missing: it is a real reading and has to show.
+
+The bar is deliberately short, five characters, so everything else fits on one line. When it still would not fit, segments drop by priority: `7d` first, then the model, the directory, the branch. Below that the context segment sheds its token counts rather than lose the 5-hour window, because the percentage already summarises the counts while nothing else reports the window you are actually spending. The terminal width comes from `COLUMNS`, which Claude Code exports; `tput cols` cannot work here, because Claude Code captures the script's output instead of handing it a terminal.
+
+`jq` reads the JSON when it is installed, about 3ms, and `python3` does when it is not, about 17ms. Both produce the same fixed-order record, so nothing downstream knows which one ran, and the test suite runs the whole file twice, once with `jq` hidden, so the fallback is not a code path that only ever executes on a VM nobody tests.
+
+Tuning, all optional: `STATUSLINE_BAR_WIDTH` (default 5), `STATUSLINE_GIT_TTL` (default 5 seconds), and `NO_COLOR` to drop the ANSI colours. `git status` is the one genuinely slow call, so its result is cached per session for a few seconds, keyed on the session id rather than `$$`, which changes on every invocation and would mean the cache never hits.
+
+The script does not use `set -e`. A status line that exits early prints an empty row, which reads as a broken terminal rather than a missing number, so failures degrade to a shorter line instead.
+
+`tests/run-statusline-cases.sh` is the regression suite: 21 cases, run against both readers. Most of them are absence cases, since that is where the bugs are.
 
 ### `sync-upstream.sh`
 
