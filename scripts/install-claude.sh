@@ -39,6 +39,19 @@
 # `git pull` updates the rules with nothing to re-install. Answer up front with
 # --hooks / --no-hooks.
 #
+# STATUS LINE (opt-in)
+#
+# A global install also offers to wire scripts/statusline.sh into
+# ~/.claude/settings.json as the statusLine command, which puts a live token
+# counter in the row above the footer: context window used, the rolling 5-hour
+# limit with a countdown to its reset, the weekly cap, and the git branch. Like
+# the hook, the settings entry points at this repo, so a `git pull` updates it
+# with nothing to re-install. Answer up front with --statusline / --no-statusline.
+#
+# An existing statusLine that points somewhere else is someone's own status line
+# and is reported and left alone, the same way a real file at a symlink path is.
+# --force replaces it.
+#
 # GLOBAL GIT RULES (opt-in)
 #
 # A global install also offers to write two rules into the global git ignore
@@ -57,8 +70,15 @@ action=install
 force=0
 git_rules=ask            # ask | yes | no   (overwritten below if flags given)
 hooks=ask                # ask | yes | no
+statusline=ask           # ask | yes | no
 CLAUDE_DIR="$HOME/.claude"
 HOOK_SCRIPT_NAME=block-dangerous-commands.sh
+STATUSLINE_SCRIPT_NAME=statusline.sh
+# The countdown to the 5-hour reset ticks in minutes, so re-running once a
+# minute keeps it honest. Claude Code also re-runs on every assistant message
+# and the moment a rate-limit window reaches its resets_at, which is what makes
+# a shorter interval pointless here: it would only add git calls.
+STATUSLINE_REFRESH=60
 ASK_RULES=('Bash(git push:*)')
 # The rules the global install offers to add. Journals are never committed in
 # any repo, and settings.local.json is the file that is supposed to die with
@@ -93,11 +113,13 @@ Usage:
   $0 --help        Show usage
 
 Options:
-  --force        Replace existing real files instead of skipping them.
-  --git-rules    Add the global git ignore rules without asking.
-  --no-git-rules Leave the global git ignore file alone without asking.
-  --hooks        Install the guardrails hook without asking.
-  --no-hooks     Leave ~/.claude/settings.json alone without asking.
+  --force         Replace existing real files instead of skipping them.
+  --git-rules     Add the global git ignore rules without asking.
+  --no-git-rules  Leave the global git ignore file alone without asking.
+  --hooks         Install the guardrails hook without asking.
+  --no-hooks      Leave ~/.claude/settings.json alone without asking.
+  --statusline    Install the token-counter status line without asking.
+  --no-statusline Leave the statusLine setting alone without asking.
 
 Examples:
   $0               every repo on this VM gets the commands
@@ -125,6 +147,8 @@ while [[ $# -gt 0 ]]; do
     --no-git-rules) git_rules=no;     shift ;;
     --hooks)        hooks=yes;        shift ;;
     --no-hooks)     hooks=no;         shift ;;
+    --statusline)    statusline=yes;  shift ;;
+    --no-statusline) statusline=no;   shift ;;
     --help|-h)      usage; exit 0 ;;
     *)              echo "unknown option: $1" >&2; echo; usage; exit 1 ;;
   esac
@@ -246,6 +270,124 @@ hook_step() {
   esac
 
   hook_install "$settings" "$hook"
+}
+
+# -------------------------------------------------------------- status line --
+#
+# The status line is the one thing offered here that is purely informational: it
+# changes nothing about what Claude Code will do, it only shows what the session
+# is already spending. It is still opt-in, because `statusLine` is a single key
+# rather than a list, so installing it means taking over a setting the user may
+# already have their own version of.
+
+statusline_path() { echo "$REPO/scripts/$STATUSLINE_SCRIPT_NAME"; }
+
+# Three answers, not two. "foreign" is the one that matters: a status line
+# someone wrote themselves is their work, and gets the same treatment as a real
+# file sitting where a symlink belongs.
+statusline_state() {
+  local settings="$1" script="$2"
+  [[ -f "$settings" ]] || { echo absent; return 0; }
+  SETTINGS="$settings" SCRIPT="$script" python3 -c '
+import json, os, sys
+try:
+    d = json.load(open(os.environ["SETTINGS"]))
+except Exception:
+    print("absent"); sys.exit(0)
+sl = d.get("statusLine")
+if not isinstance(sl, dict) or not sl.get("command"):
+    print("absent")
+elif os.environ["SCRIPT"] in str(sl.get("command")):
+    print("ours")
+else:
+    print("foreign")
+' 2>/dev/null || echo absent
+}
+
+# Merge into whatever is already in settings.json rather than writing the file
+# fresh: it holds the user's own preferences and this script does not own them.
+statusline_install() {
+  local settings="$1" script="$2" refresh="$3"
+  mkdir -p "$(dirname "$settings")"
+  SETTINGS="$settings" SCRIPT="$script" REFRESH="$refresh" python3 -c '
+import json, os
+path = os.environ["SETTINGS"]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except FileNotFoundError:
+    data = {}
+except Exception as e:
+    raise SystemExit("cannot parse %s: %s; fix or move it and re-run" % (path, e))
+
+data["statusLine"] = {
+    "type": "command",
+    "command": os.environ["SCRIPT"],
+    "padding": 0,
+    "refreshInterval": int(os.environ["REFRESH"]),
+}
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+print("  statusLine  -> " + os.environ["SCRIPT"])
+print("written to " + path)
+'
+}
+
+statusline_step() {
+  local settings="$CLAUDE_DIR/settings.json" script state
+  script="$(statusline_path)"
+
+  if [[ ! -x "$script" ]]; then
+    echo "status line: skipped, $script is missing or not executable"
+    return 0
+  fi
+
+  state="$(statusline_state "$settings" "$script")"
+  if [[ "$state" == ours ]]; then
+    echo "status line: already in place ($settings)"
+    return 0
+  fi
+  if [[ "$state" == foreign && $force -eq 0 ]]; then
+    echo "status line: skipped, $settings already has a statusLine of its own (--force to replace)"
+    return 0
+  fi
+
+  case "$statusline" in
+    no)
+      echo "status line: skipped (--no-statusline)"
+      return 0 ;;
+    ask)
+      if [[ ! -t 0 ]]; then
+        echo "status line: skipped (not a terminal); re-run with --statusline to add it"
+        return 0
+      fi
+      echo
+      echo "Install the token counter status line?"
+      echo "  script    $script"
+      echo "  settings  $settings"
+      echo
+      say "It renders one row above the footer: the model, the directory, the git branch, a short bar with the context window used and the token counts, the rolling 5-hour limit with a countdown to its reset, and the weekly cap."
+      echo
+      say "Every segment hides itself when its data is absent, so on a metered API key, which has no subscription windows to report, it is just the context counter."
+      echo
+      # Render the real thing rather than describe it. A sample beats a sentence,
+      # and it doubles as a check that the script runs on this machine at all.
+      local sample=""
+      sample="$(NO_COLOR=1 COLUMNS=76 "$script" --demo 2>/dev/null)" || sample=""
+      if [[ -n "$sample" ]]; then
+        echo "  $sample"
+        echo
+      fi
+      local reply=""
+      read -r -p "install it? [y/N] " reply || reply=""
+      case "$reply" in
+        [yY]|[yY][eE][sS]) ;;
+        *) echo "left $settings alone"; return 0 ;;
+      esac ;;
+  esac
+
+  statusline_install "$settings" "$script" "$STATUSLINE_REFRESH"
 }
 
 # ---------------------------------------------------------------- git rules --
@@ -450,7 +592,7 @@ esac
 # --uninstall leaves the git rules alone: they are a git preference the user
 # opted into, not a link this script owns.
 case "$action" in
-  install) git_rules_step; hook_step ;;
+  install) git_rules_step; hook_step; statusline_step ;;
   check)
     git_ignore_path="$(git_ignore_file)"
     for rule in "${GIT_IGNORE_RULES[@]}"; do
@@ -465,5 +607,10 @@ case "$action" in
       echo "  present  guardrails hook + git push ask rule"
     else
       echo "  ABSENT   guardrails hook + git push ask rule"
-    fi ;;
+    fi
+    case "$(statusline_state "$CLAUDE_DIR/settings.json" "$(statusline_path)")" in
+      ours)    echo "  present  token counter status line" ;;
+      foreign) echo "  FOREIGN  status line (a statusLine not from this repo)" ;;
+      *)       echo "  ABSENT   token counter status line" ;;
+    esac ;;
 esac

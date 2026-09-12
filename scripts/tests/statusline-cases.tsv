@@ -1,0 +1,34 @@
+# Cases for scripts/statusline.sh, run by run-statusline-cases.sh.
+# Format: expected-output <TAB> COLUMNS <TAB> session JSON
+# Cases run with NO_COLOR=1, so the expectation is the layout, not escape bytes.
+# @NOW+N@ / @NOW-N@ become epoch seconds N seconds from now. __EMPTY__ expects
+# no output at all. Lines starting with # are ignored.
+#
+# Every field in this JSON is allowed to be absent or null, so most cases here are
+# absence cases. Add one whenever you add a segment, and keep the pair that proves
+# 0% is rendered rather than treated as missing.
+#
+# Countdown offsets sit mid-minute (6450, not 6420) on purpose. The harness fixes
+# the epoch a moment before the script reads its own clock, so an offset landing
+# exactly on a minute boundary renders one minute lower about half the time.
+Opus | tmp | ██░░░ 34% 68k/200k | 5h 24% 1h47m | 7d 41%	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t1"}
+Opus | tmp | ██░░░ 34% 68k/200k | 5h 24% 1h47m | 7d 41%	0	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t1"}
+Opus | tmp | ██░░░ 34% 68k/200k	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"session_id":"t2"}
+Opus | tmp | ██░░░ 34% 68k/200k | 5h 24% 1h47m	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@}},"session_id":"t3"}
+Opus | tmp | ██░░░ 34% 68k/200k | 7d 41%	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"rate_limits":{"seven_day":{"used_percentage":41.2}},"session_id":"t4"}
+Opus | tmp | 5h 24% 1h47m	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":null,"current_usage":null},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@}},"session_id":"t5"}
+Opus | tmp | ░░░░░ 0% 0/200k | 5h 0% 4h00m	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":0,"total_input_tokens":0,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":0,"resets_at":@NOW+14430@}},"session_id":"t6"}
+Opus 5 | tmp | ████░ 84% 840k/1.0M | 5h 91% 25m	100	{"model":{"display_name":"Opus 5"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":84,"total_input_tokens":840000,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":91.2,"resets_at":@NOW+1530@}},"session_id":"t7"}
+Opus | tmp | ██░░░ 34% 68k/200k | 5h 55%	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":55,"resets_at":@NOW-60@}},"session_id":"t8"}
+Opus | tmp | ██░░░ 34% 68k/200k | 5h 10% <1m	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":@NOW+30@}},"session_id":"t9"}
+Opus | tmp | █████ 100% 200k/200k	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":100,"total_input_tokens":200000,"context_window_size":200000},"session_id":"t10"}
+Opus | tmp | ██░░░ 34%	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34},"session_id":"t11"}
+Opus | tmp | ██░░░ 34% 68k/200k	100	{"model":{"display_name":"Opus"},"cwd":"/tmp","context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"session_id":"t12"}
+tmp | ██░░░ 34% 68k/200k | 5h 24% 1h47m | 7d 41%	100	{"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t13"}
+Opus | tmp | ░░░░░ 9% 17k/200k	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":8.6,"total_input_tokens":17400,"context_window_size":200000},"session_id":"t14"}
+Opus | tmp | ██░░░ 34% 68k/200k	100	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"context_window_size":200000},"exceeds_200k_tokens":false,"prompt_cache":{"warm":true},"fast_mode":false,"session_id":"t15"}
+tmp | ██░░░ 34% 68k/200k | 5h 24% 1h47m	45	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t1"}
+██░░░ 34% | 5h 24% 1h47m	30	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t1"}
+██░░░ 34%	15	{"model":{"display_name":"Opus"},"workspace":{"current_dir":"/tmp"},"context_window":{"used_percentage":34,"total_input_tokens":68000,"total_output_tokens":1200,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":@NOW+6450@},"seven_day":{"used_percentage":41.2}},"session_id":"t1"}
+__EMPTY__	100	{}
+__EMPTY__	100	{not json
