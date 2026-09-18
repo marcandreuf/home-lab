@@ -51,7 +51,7 @@ On a new VM, clone this repo and run `./scripts/install-claude.sh`. That is the 
 
 Work one repo per Claude Code session and per editor window — the session's working directory is the repo root, never a parent folder holding several repos. Permissions, MCP servers, `CLAUDE.md`, domain docs and journals are all scoped to a repo root, so a session started above one silently gets the union of everything below it. Cross-repo access is granted per case, not as a standing default. See [One repo per session](docs/sdlc.md#one-repo-per-session).
 
-A rebuilt VM should cost a `git clone` and little else, so every repo commits its `.claude/settings.json` and `.mcp.json` — the permission allowlist and MCP servers that Claude Code would otherwise keep machine-locally. Journals and `.claude/settings.local.json` are never committed: they are backed up out of band. See [Repo portability](docs/sdlc.md#repo-portability) for the reasoning.
+A rebuilt VM should cost a `git clone` and little else, so every repo commits its `.claude/settings.json` and `.mcp.json` — the permission allowlist and MCP servers that Claude Code would otherwise keep machine-locally. Journals and `.claude/settings.local.json` are never committed, and nothing backs them up: they are local-only and disposable, so anything worth keeping gets promoted to a commit, a doc or an issue before the machine goes away. See [Repo portability](docs/sdlc.md#repo-portability) for the reasoning.
 
 ### Working on this repo
 
