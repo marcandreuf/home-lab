@@ -22,6 +22,8 @@ A bare project name resolves under `~/projects`; anything with a slash is used a
 
 The window geometries are tuned to one screen size. On a different display, re-tune them; the header explains how to read the current geometry out of `xdotool`.
 
+If it opens no windows and ends with `could not focus the Claude Code window`, see [Troubleshooting](#troubleshooting): the shell is on a different D-Bus session bus than the desktop.
+
 ### `banner.sh`
 
 Prints a word as a coloured ASCII-art banner via `toilet`, framed by horizontal rules. Used by `morning-terminals.sh` for its banner window, and standalone for labelling a terminal.
@@ -135,6 +137,8 @@ Defaults: user from `$REMOTE_USER` (else `user`), local port 59003, remote port 
 
 `--restart` restarts the VNC server on the remote host. That **kills every app running in the session**, so it is for recovering a broken session (an auth failure, say), not for routine connecting.
 
+The `~/.vnc/xstartup` behind this session starts its own D-Bus bus, which is why credential tools cannot reach the keyring ([issue #5](https://github.com/marcandreuf/home-lab/issues/5)) and why terminals can fail to open ([Troubleshooting](#troubleshooting)).
+
 ### `wol-proxmox.sh`
 
 Sends a Wake-on-LAN magic packet to bring the Proxmox host up.
@@ -165,3 +169,103 @@ sudo ./scripts/zerotier-reset-identity.sh <NETWORK_ID>
 ```
 
 Needs root. The node gets a **new ID**, so it has to be re-authorized in the ZeroTier controller before it can reach the network again.
+
+## Troubleshooting
+
+### `morning-terminals.sh` opens no windows, then `could not focus the Claude Code window`
+
+The tell-tale is that the D-Bus errors arrive back at the prompt *after* the
+script has already exited, up to 25 seconds later:
+
+```
+# Failed to use specified server: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown:
+#   The name :1.NN was not provided by any .service files
+# Falling back to default server.                                          (x3)
+could not focus the Claude Code window
+# Error constructing proxy for org.gnome.Terminal:/org/gnome/Terminal/Factory0:
+#   Error calling StartServiceByName for org.gnome.Terminal: Timeout was reached
+```
+
+**Cause: the shell and the desktop are on two different D-Bus session buses.**
+
+A VNC session started from `~/.vnc/xstartup` runs `dbus-launch`, so it gets a
+private bus at `/tmp/dbus-XXXXXXXX`. Meanwhile `systemd --user` runs its own at
+`/run/user/$(id -u)/bus`, and that is the one holding the Secret Service. Export
+`DBUS_SESSION_BUS_ADDRESS` from a shell rc file to reach the keyring and the
+shell moves off the bus its own windows live on. `gnome-terminal` then asks a
+bus that has never heard of the server owning this window, falls back to
+activating a new one, and that activation fails — leaving `morning-terminals.sh`
+with no window to focus and no error it can see.
+
+This is the keyring problem in
+[issue #5](https://github.com/marcandreuf/home-lab/issues/5) seen from the other
+side: the workaround for one is the cause of the other.
+
+**Confirm it:**
+
+```sh
+./scripts/morning-terminals.sh --check     # names both halves if they are wrong
+```
+
+Or by hand — the server named by `GNOME_TERMINAL_SERVICE` owns the window you
+are typing in, so the bus you are on should know it:
+
+```sh
+dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+  /org/freedesktop/DBus org.freedesktop.DBus.NameHasOwner \
+  "string:$GNOME_TERMINAL_SERVICE"        # boolean false => wrong bus
+```
+
+**Fix: scope the export to the command that needs it.** Replace a blanket
+`export DBUS_SESSION_BUS_ADDRESS=...` in `~/.zshrc` or `~/.bashrc` with a
+wrapper, so the credential tool reaches the keyring while everything else stays
+on the session's own bus:
+
+```sh
+# <tool> is whichever CLI stores its credentials in the Secret Service
+<tool>() {
+  local bus="/run/user/$(id -u)/bus"
+  if [ -S "$bus" ]; then
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" command <tool> "$@"
+  else
+    command <tool> "$@"
+  fi
+}
+```
+
+To recover the shell you are already in without closing its windows — the
+address is the one the running `gnome-terminal-server` is using, read from its
+own environment:
+
+```sh
+unset GNOME_TERMINAL_SERVICE GNOME_TERMINAL_SCREEN
+export DBUS_SESSION_BUS_ADDRESS="$(tr '\0' '\n' < /proc/$(pgrep -f gnome-terminal-server | head -1)/environ \
+  | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')"
+```
+
+Do **not** kill `gnome-terminal-server` to clear the state: it owns every
+terminal window on the desktop, including the one running the fix.
+
+### Activating `gnome-terminal-server` fails with `Cannot open display:`
+
+```
+systemctl --user status gnome-terminal-server.service
+  gnome-terminal-server[NNNN]: Failed to parse arguments: Cannot open display:
+```
+
+D-Bus activation of the terminal server goes through `systemd --user`, which
+inherits *its* environment, not the client's. A VNC session started by hand
+never tells it which display to open, so activation dies instantly and the
+client waits out the full D-Bus timeout. Having `DISPLAY` set in your shell does
+not help; systemd is the one that needs it.
+
+```sh
+systemctl --user show-environment | grep DISPLAY       # empty => this is your problem
+dbus-update-activation-environment --systemd DISPLAY XAUTHORITY
+systemctl --user reset-failed gnome-terminal-server.service
+```
+
+Put the `dbus-update-activation-environment` line in `~/.vnc/xstartup` to make
+it survive the next login. It is a prerequisite for any fix that moves the VNC
+desktop onto the systemd bus, since every GUI app then activates through
+`systemd --user` too.

@@ -12,7 +12,7 @@ These scripts help me:
 
 ## Layout
 
-- [`scripts/`](scripts/README.md) – every shell script, with a page explaining what each one is for and when to reach for it
+- [`scripts/`](scripts/README.md) – every shell script, with a page explaining what each one is for and when to reach for it, plus [Troubleshooting](scripts/README.md#troubleshooting) for the VM-level failures they run into
 - `commands/` – Claude Code slash commands
 - `skills/` – Claude Code skills, one directory per skill ([skills/README.md](skills/README.md))
 - [`docs/sdlc.md`](docs/sdlc.md) – the development flow we work to, and the vocabulary it uses

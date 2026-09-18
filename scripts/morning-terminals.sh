@@ -43,6 +43,20 @@
 #           windows, so focus_new_window just times out.
 #       Fix: at the login screen, use the gear menu and pick "Ubuntu on Xorg".
 #
+#   One D-Bus session bus (required, cannot be installed)
+#       Check with: ./morning-terminals.sh --check
+#       The normal run refuses to open anything when this is wrong.
+#
+#       The shell must sit on the same session bus as the desktop that owns its
+#       windows. A VNC session started from ~/.vnc/xstartup runs dbus-launch and
+#       so has a private bus; exporting DBUS_SESSION_BUS_ADDRESS from a shell rc
+#       file -- to reach the Secret Service for a CLI tool's credentials, say --
+#       moves the shell off it. gnome-terminal then asks a bus that has never
+#       heard of its own server, falls back to activating a new one, and that
+#       activation fails after a 25-second D-Bus timeout having opened nothing.
+#       Scope such an export to the command that needs it instead of the whole
+#       session.
+#
 #   xdotool (required, not installed by default)      --install handles this
 #   gnome-terminal (required)                         --install handles this
 #       Default on Ubuntu Desktop, but NOT on Xubuntu (xfce4-terminal) or
@@ -167,6 +181,88 @@ session_type() {
   fi
 }
 
+# True when $1 is a bus name with a current owner on this shell's session bus.
+# --reply-timeout so a wedged bus cannot stall --check, which is the very thing
+# being diagnosed: the failure this guards against is a 25s activation timeout.
+dbus_name_has_owner() {
+  timeout 5 dbus-send --session --reply-timeout=2000 --print-reply \
+    --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus.NameHasOwner "string:$1" 2>/dev/null \
+    | grep -q "boolean true"
+}
+
+# The shell and the desktop session can end up on different D-Bus session buses,
+# and when they do this script fails in the least helpful way available: three
+# windows that never appear, a 25-second wait, and "could not focus".
+#
+# A VNC session started from ~/.vnc/xstartup runs `dbus-launch`, giving itself a
+# private bus. Anything that then exports DBUS_SESSION_BUS_ADDRESS from a shell
+# rc file -- pointing at the systemd user bus to reach the Secret Service, say,
+# which is a common fix for CLI tools that store credentials -- moves the shell
+# off the bus its own windows live on. gnome-terminal asks the wrong bus, cannot
+# find the server that owns this window, and falls back to activating a fresh
+# one. That activation goes through systemd --user, which on a hand-started VNC
+# session has no DISPLAY, so it dies with "Cannot open display:" and the client
+# sits out the full D-Bus timeout.
+#
+# Both halves are cheap to test up front, so test them here where there is room
+# to explain them.
+# With any argument, print nothing but the problems: the normal run wants to be
+# silent when the bus is fine, while --check lists everything it verified.
+check_terminal_bus() {
+  local status=0 quiet="${1:-}"
+
+  if ! command -v dbus-send &>/dev/null; then
+    [[ -n "$quiet" ]] || echo "  absent   dbus-send (skipping the D-Bus reachability check)"
+    return 0
+  fi
+
+  # Without an address, dbus-send would autolaunch rather than report, which
+  # tells us nothing and risks starting a bus nobody asked for.
+  if [[ -z "$DBUS_SESSION_BUS_ADDRESS" ]]; then
+    [[ -n "$quiet" ]] || echo "  absent   DBUS_SESSION_BUS_ADDRESS unset (skipping the bus check)"
+    return 0
+  fi
+
+  # GNOME_TERMINAL_SERVICE names the server that owns the window this script was
+  # launched from, so a bus that has never heard of it is not the bus that
+  # window is on. That makes it an exact test for the split, with no false
+  # positive from a session that simply has no terminal open yet.
+  if [[ -n "$GNOME_TERMINAL_SERVICE" ]] && ! dbus_name_has_owner "$GNOME_TERMINAL_SERVICE"; then
+    echo "  PROBLEM  this shell is on a different D-Bus session bus than the" >&2
+    echo "           terminal it is running in: $GNOME_TERMINAL_SERVICE is" >&2
+    echo "           unknown on $DBUS_SESSION_BUS_ADDRESS" >&2
+    echo "           something exported DBUS_SESSION_BUS_ADDRESS -- check your" >&2
+    echo "           shell rc files, and scope it to the command that needs it" >&2
+    status=1
+  fi
+
+  if dbus_name_has_owner org.gnome.Terminal; then
+    [[ -n "$quiet" ]] || echo "  ok       gnome-terminal server reachable on the session bus"
+    return $status
+  fi
+
+  # No server yet is normal and fine -- provided activating one would work.
+  [[ -n "$quiet" ]] || echo "  absent   no gnome-terminal server yet (one will be activated)"
+
+  if command -v systemctl &>/dev/null; then
+    if systemctl --user is-failed --quiet gnome-terminal-server.service; then
+      echo "  PROBLEM  gnome-terminal-server.service is in a failed state; see:" >&2
+      echo "           systemctl --user status gnome-terminal-server.service" >&2
+      status=1
+    fi
+
+    if ! systemctl --user show-environment 2>/dev/null | grep -q "^DISPLAY="; then
+      echo "  PROBLEM  systemd --user has no DISPLAY, so activating the terminal" >&2
+      echo "           server will fail with 'Cannot open display:'; import it:" >&2
+      echo "           dbus-update-activation-environment --systemd DISPLAY XAUTHORITY" >&2
+      status=1
+    fi
+  fi
+
+  return $status
+}
+
 # Report on every requirement. Returns non-zero if something required is
 # missing, so --check is usable as a preflight.
 check_requirements() {
@@ -190,6 +286,8 @@ check_requirements() {
       status=1
     fi
   done
+
+  check_terminal_bus || status=1
 
   if command -v lazydocker &>/dev/null; then
     echo "  ok       lazydocker"
@@ -348,6 +446,14 @@ focus_new_window() {
 open_terminals() {
   if ! command -v gnome-terminal &>/dev/null; then
     echo "gnome-terminal not installed -- run: $0 --install" >&2
+    exit 1
+  fi
+
+  # Fail fast instead of opening nothing. On the wrong bus every launch below
+  # blocks for 25 seconds inside gnome-terminal before giving up, and the only
+  # symptom this script can see by then is "could not focus".
+  if ! check_terminal_bus quiet; then
+    echo "run '$0 --check' for the full report" >&2
     exit 1
   fi
 
