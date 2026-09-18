@@ -121,6 +121,21 @@ Reports what changed in [mattpocock/skills](https://github.com/mattpocock/skills
 
 A maintainer tool, for the machine this repo is developed on. Other VMs clone this repo, run `install-claude.sh`, and never need an upstream clone. Settings live in [`../UPSTREAM.md`](../UPSTREAM.md), including the optional `FORK_URL` for contributing back upstream.
 
+### `install-glab.sh`
+
+Installs the [GitLab CLI](https://gitlab.com/gitlab-org/cli) and checks it can store a token safely. The engineering skills can track issues in GitLab instead of GitHub, and every one of those operations shells out to `glab`; nothing else here installs it, and it is not in apt.
+
+```sh
+./scripts/install-glab.sh              # report status, install nothing (default)
+./scripts/install-glab.sh --install    # install or update, then report
+```
+
+**The keyring matters more than the binary.** By default `glab` stores the token in the OS keyring — the Secret Service on Linux. When no keyring is reachable it does not fail and does not ask: it writes the token in **plaintext** to `~/.config/glab-cli/config.yml`. On a machine whose desktop is on a different D-Bus bus than the keyring, that happens silently. So the check probes the Secret Service, warns if a plaintext token is already sitting in the config, and reports auth last — the order in which these things actually fail.
+
+Authenticating stays a human step (`glab auth login` is interactive, and takes `--hostname` for a self-hosted instance). Credentials already written as plaintext are not stuck: re-running `glab auth login` with a reachable keyring moves them into it.
+
+Fix the bus **before** authenticating — see [Troubleshooting](#troubleshooting) and [`vnc-xstartup`](#vnc-xstartup). On the wrong bus `glab` does not error, it hangs, and it ignores `SIGTERM`, so it takes `kill -9`. The check knows this and skips the auth probe rather than hanging with it.
+
 ## Home lab admin
 
 ### `connect-vnc.sh`

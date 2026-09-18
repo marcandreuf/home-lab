@@ -31,6 +31,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 | `statusline.sh` | Status line token counter: context window used, the 5-hour and weekly limits, git branch |
 | `tests/run-hook-cases.sh` | Regression suite for the guardrails hook (98 cases) |
 | `tests/run-statusline-cases.sh` | Regression suite for the status line (21 cases, both JSON readers) |
+| `install-glab.sh` | Installs the GitLab CLI and checks it can store a token in the keyring rather than in plaintext |
 | `sync-upstream.sh` | Reports what changed upstream in mattpocock/skills since the last review |
 | `connect-vnc.sh` | Connects to a remote VNC session over an SSH tunnel |
 | `vnc-xstartup` | A `~/.vnc/xstartup` that keeps the VNC desktop on one D-Bus bus, so credential tools can reach the keyring (needs `enable-linger`) |
