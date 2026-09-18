@@ -14,7 +14,7 @@ allowed-tools: Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git b
 REPO_PATH = auto
 ```
 
-**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/`. Journals are **not** committed — `.gitignore` keeps `.claude/journals/` out of git in every repo, because a credential written in prose escapes the scans that catch one in code. They are local working notes, backed up out of band. Never treat a journal as version-controlled.
+**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/`. Journals are **not** committed — `.gitignore` keeps `.claude/journals/` out of git in every repo, because a credential written in prose escapes the scans that catch one in code. They are local working notes: local-only, disposable, and backed up by nothing. Never treat a journal as version-controlled or as an archive — promote anything worth keeping into a commit, a doc or an issue.
 
 ---
 
