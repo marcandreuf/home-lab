@@ -185,6 +185,29 @@ connect_vnc_with_retry() {
 }
 
 # Function to establish SSH tunnel
+# The VNC session's xstartup decides which D-Bus session bus the desktop gets,
+# and the wrong choice stays invisible until a credential tool hangs or a
+# terminal refuses to open. A running `dbus-launch --exit-with-session` is the
+# tell: the session took the private-bus path instead of the systemd one. The
+# bracketed [d] stops the pattern from matching the shell that carries it.
+#
+# Warn, never fail: a desktop with an unreachable keyring still works, and this
+# script's job is to connect to it.
+warn_if_split_dbus() {
+    if ssh -o ConnectTimeout=10 -o BatchMode=yes "$USER@$HOST_IP" \
+        'pgrep -u "$(id -un)" -f "[d]bus-launch --exit-with-session" >/dev/null 2>&1'; then
+        echo ""
+        echo "WARNING: the VNC session on $HOST_IP runs its own D-Bus session bus."
+        echo "  Credential tools in that desktop cannot reach the keyring and may"
+        echo "  fall back to storing secrets in plaintext; terminals there can also"
+        echo "  fail to open."
+        echo "  Fix: run 'loginctl enable-linger' on $HOST_IP, install"
+        echo "  scripts/vnc-xstartup as ~/.vnc/xstartup, then restart the session."
+        echo "  Details: scripts/README.md, Troubleshooting."
+        echo ""
+    fi
+}
+
 establish_ssh_tunnel() {
     # Clean up any existing connections on this port first
     cleanup_local_port
@@ -305,6 +328,8 @@ fi
 # Show current VNC servers
 echo "Current VNC servers:"
 ssh "$USER@$HOST_IP" 'vncserver -list'
+
+warn_if_split_dbus
 
 # Establish SSH tunnel
 if ! establish_ssh_tunnel; then

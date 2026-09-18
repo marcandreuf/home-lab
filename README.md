@@ -33,6 +33,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 | `tests/run-statusline-cases.sh` | Regression suite for the status line (21 cases, both JSON readers) |
 | `sync-upstream.sh` | Reports what changed upstream in mattpocock/skills since the last review |
 | `connect-vnc.sh` | Connects to a remote VNC session over an SSH tunnel |
+| `vnc-xstartup` | A `~/.vnc/xstartup` that keeps the VNC desktop on one D-Bus bus, so credential tools can reach the keyring (needs `enable-linger`) |
 | `wol-proxmox.sh` | Sends a Wake-on-LAN packet to the Proxmox host |
 | `restart-program.sh` | Kills a program by name and relaunches it |
 | `zerotier-reset-identity.sh` | Regenerates a ZeroTier node identity and rejoins a network |

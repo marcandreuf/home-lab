@@ -1,0 +1,74 @@
+#!/bin/sh
+
+# vnc-xstartup - the ~/.vnc/xstartup that keeps a VNC desktop on one D-Bus bus
+#
+# Install it on the machine that RUNS the VNC server (not the one you connect
+# from), then restart the session:
+#
+#   install -m 755 scripts/vnc-xstartup ~/.vnc/xstartup
+#   vncserver -kill :1 && vncserver :1 -localhost no
+#
+# PREREQUISITE: loginctl enable-linger "$(id -un)"
+#
+#   Without lingering, /run/user/<uid> exists only while the user has a login
+#   session. A VNC desktop is meant to outlive the SSH connection that started
+#   it, so pointing it at the systemd bus without lingering would tear the
+#   desktop's bus away on every disconnect -- worse than the problem below.
+#   Check with: loginctl show-user "$(id -un)" -p Linger --value   -> "yes"
+#
+#
+# WHY THIS FILE EXISTS
+#
+# The stock xstartup unsets DBUS_SESSION_BUS_ADDRESS and runs `dbus-launch`,
+# giving the desktop a private bus under /tmp/dbus-XXXXXXXX. Meanwhile
+# `systemd --user` runs its own at /run/user/<uid>/bus, and that is the one
+# holding the Secret Service. The result is two buses on one machine:
+#
+#   - Credential tools in the desktop cannot see the keyring. They either hang
+#     waiting for a reply that never comes, or -- worse, because it is silent --
+#     fall back to writing the credential to their config file in plaintext.
+#   - Working around that by exporting DBUS_SESSION_BUS_ADDRESS from a shell rc
+#     file moves the shell off the bus its own windows live on, and then
+#     gnome-terminal cannot find the server that owns them. See the
+#     Troubleshooting section of scripts/README.md.
+#
+# So: use the systemd bus when it is there, and keep dbus-launch only as the
+# fallback, so the desktop can never end up with no bus at all.
+
+unset SESSION_MANAGER
+
+[ -r "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
+
+export XKL_XMODMAP_DISABLE=1
+
+BUS="/run/user/$(id -u)/bus"
+
+if [ -S "$BUS" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$BUS"
+
+    # On the systemd bus, activating a GUI service goes through `systemd --user`,
+    # which has its OWN environment, not the client's. Without DISPLAY there it
+    # fails with "Failed to parse arguments: Cannot open display:" and the client
+    # waits out the full 25-second D-Bus timeout -- so a terminal that would not
+    # open is the price of skipping this line. Exporting DISPLAY in your shell
+    # does not help; systemd is the process that needs to know.
+    #
+    # XAUTHORITY is passed too but is usually absent: vncserver does not export
+    # it, and unset variables are ignored here. X clients fall back to
+    # ~/.Xauthority on their own, which is the file vncserver writes.
+    if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+        dbus-update-activation-environment --systemd DISPLAY XAUTHORITY
+    else
+        # dbus-update-activation-environment ships in dbus-bin. Without it,
+        # cover the systemd half at least; D-Bus's own activation environment
+        # goes unset, which is survivable on a systemd-activated bus.
+        systemctl --user import-environment DISPLAY XAUTHORITY
+    fi
+
+    exec startxfce4
+fi
+
+# No systemd user bus (lingering off, or a system without it). A private bus is
+# better than none: the desktop works, the keyring stays out of reach.
+echo "xstartup: $BUS not found, falling back to a private D-Bus session" >&2
+exec dbus-launch --exit-with-session startxfce4
