@@ -1,20 +1,22 @@
 ---
 description: Resume work from the last session by reading the latest journal in .claude/journals/ and verifying current state
 argument-hint: "[date or slug, e.g. 2026-05-13 or feature-x — optional, defaults to most recent]"
-allowed-tools: Bash(ls:*), Bash(git log:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git diff:*), Bash(date:*), Bash(test:*), Bash(find:*), Bash(stat:*), Bash(pwd:*), Read, AskUserQuestion
+allowed-tools: Bash(ls:*), Bash(git log:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git diff:*), Bash(git worktree list:*), Bash(date:*), Bash(test:*), Bash(find:*), Bash(stat:*), Bash(pwd:*), Read, AskUserQuestion
 ---
 
 ## Configuration
 
-**REPO_PATH** — the absolute path to the project repo this command operates on.
+**REPO_PATH** — the absolute path to the project repo this command operates on. The *repository*, which is not always the directory the session is running in: open a git worktree and the two diverge.
 
-> Set this once per machine/account. If left as `auto`, the command will detect it at run time via `git rev-parse --show-toplevel` from the current working directory.
+> Set this once per machine/account. If left as `auto`, the command will detect it at run time from the current working directory: the path on the first `worktree ` line of `git worktree list --porcelain`, which git always prints for the main working tree. In a plain checkout that is the checkout itself, so `auto` resolves exactly as it always has.
 
 ```
 REPO_PATH = auto
 ```
 
-**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/`. Journals are **not** committed — `.gitignore` keeps `.claude/journals/` out of git in every repo, because a credential written in prose escapes the scans that catch one in code. They are local working notes: local-only, disposable, and backed up by nothing. Never treat a journal as version-controlled or as an archive — promote anything worth keeping into a commit, a doc or an issue.
+**WORKTREE_PATH** — the working tree this session is actually in, from `git rev-parse --show-toplevel`. In a plain checkout it equals `REPO_PATH` and nothing below changes. In a linked worktree it does not: the journal is **read from the repository** and **verified against this worktree**. Check git state at `REPO_PATH` in a worktree session and you would compare the journal against whatever another session has checked out there, and report its branch and its dirty files as drift.
+
+**JOURNAL_DIR** is derived as `${REPO_PATH}/.claude/journals/` — one stream per repository, shared by every worktree of it. Look for it inside a worktree and you find an empty directory and conclude there is nothing to resume from, while the real stream sits in the repository. Journals are **not** committed — `.gitignore` keeps `.claude/journals/` out of git in every repo, because a credential written in prose escapes the scans that catch one in code. They are local working notes: local-only, disposable, and backed up by nothing. Never treat a journal as version-controlled or as an archive — promote anything worth keeping into a commit, a doc or an issue.
 
 ---
 
@@ -22,9 +24,9 @@ You are briefing the user at the start of a new working day. The goal is to make
 
 ## Your task
 
-1. Resolve `${REPO_PATH}` and `${JOURNAL_DIR}` per the Configuration block above.
+1. Resolve `${REPO_PATH}`, `${WORKTREE_PATH}` and `${JOURNAL_DIR}` per the Configuration block above.
 2. Find and read the latest session journal in `${JOURNAL_DIR}`.
-3. Verify the current state of the repo at `${REPO_PATH}` matches what the journal said (flag any drift).
+3. Verify the current state of the working tree at `${WORKTREE_PATH}` matches what the journal said (flag any drift).
 4. If the journal's "Next session: start here" references specific files in the repo, read just enough of those files to have context ready.
 5. Produce a short, structured resumption briefing.
 6. Ask the user how they want to start.
@@ -40,10 +42,13 @@ Do **not** take any action beyond reading and briefing — no commits, no branch
 
 If multiple journals share the same most-recent date (e.g., morning + evening), read both in chronological order — the latest supersedes earlier ones, but earlier may contain referenced context.
 
+Same-date journals are not always one session's morning and evening: with worktrees they can be two sessions working different branches of the same repo in parallel. A journal naming a **Worktree** other than this one describes someone else's tree, so it supersedes nothing here. Prefer the latest journal whose worktree matches this session; if none matches, brief from the latest anyway and say plainly which worktree it came from.
+
 ## Steps
 
 1. **Resolve paths.**
-   - If `REPO_PATH = auto`: run `git rev-parse --show-toplevel` from the current directory. If that fails (not in a git repo), tell the user to set `REPO_PATH` explicitly in this file and stop.
+   - If `REPO_PATH = auto`: run `git worktree list --porcelain` from the current directory and take the path on the first `worktree ` line. If that fails (not in a git repo), tell the user to set `REPO_PATH` explicitly in this file and stop.
+   - Set `WORKTREE_PATH` from `git rev-parse --show-toplevel`.
    - Set `JOURNAL_DIR = ${REPO_PATH}/.claude/journals`.
    - If `${JOURNAL_DIR}` does not exist, tell the user there are no journals yet and stop. Suggest running `/wrap-up` at the end of today's session.
 
@@ -58,17 +63,18 @@ If multiple journals share the same most-recent date (e.g., morning + evening), 
    - **Open threads:** unfinished items, parked decisions.
    - **References:** paths to other docs or code files the next step depends on.
 
-4. **Verify current git state** in `${REPO_PATH}` (parallel where independent):
-   - `git -C ${REPO_PATH} rev-parse --abbrev-ref HEAD` — current branch
-   - `git -C ${REPO_PATH} log -1 --format="%h %s"` — last commit on branch
-   - `git -C ${REPO_PATH} status --short` — uncommitted changes
-   - `git -C ${REPO_PATH} log --since="<journal-date>" --oneline --no-merges` — any commits since the journal was written
+4. **Verify current git state** in `${WORKTREE_PATH}`, never in `${REPO_PATH}` — the tree this session is in is the one to compare (parallel where independent):
+   - `git -C ${WORKTREE_PATH} rev-parse --abbrev-ref HEAD` — current branch
+   - `git -C ${WORKTREE_PATH} log -1 --format="%h %s"` — last commit on branch
+   - `git -C ${WORKTREE_PATH} status --short` — uncommitted changes
+   - `git -C ${WORKTREE_PATH} log --since="<journal-date>" --oneline --no-merges` — any commits since the journal was written
 
 5. **Detect drift** between journal and current state. Examples to flag:
    - Branch changed since the journal.
    - New commits landed on the branch (someone else merged work, or you committed after writing the journal).
    - Working tree now dirty when journal said clean (or vice versa).
    - Files named in "Next session: start here" no longer exist at the expected path.
+   - A journal whose **Worktree** is not this one is a different tree, not drift. Report the mismatch as context ("this journal is from `{path}`; you are in `{WORKTREE_PATH}`") and suppress the branch and dirty-tree flags, which would otherwise fire on every line of a perfectly accurate journal.
 
 6. **Read load-bearing references.** If "Next session: start here" names a specific file in the repo (e.g., `src/foo/bar.py:some_function()`):
    - Confirm the file exists.
@@ -99,6 +105,7 @@ If multiple journals share the same most-recent date (e.g., morning + evening), 
 Resuming from: {journal-filename} ({journal-date})
 
 Branch: {current branch} {⚠ flag if changed from journal}
+Worktree: {WORKTREE_PATH — this line only when it differs from the repo path; add "journal is from {other path}" when the journal names a different one}
 Last commit: {short hash + subject}
 Working tree: {clean | N files modified}
 {Drift note, only if any: e.g., "⚠ N new commits on branch since journal was written" or "⚠ journal said clean, working tree is now dirty"}
@@ -124,7 +131,7 @@ Open threads ({N}):
 - **Flag drift honestly.** If the repo state diverges from the journal, surface it — don't paper over it.
 - **Don't invent context.** If the journal is thin on a section, say so rather than filling gaps from assumptions.
 - **Don't preload every reference.** Only read files directly named in "Next session: start here." Skim the rest by path only.
-- **If no journal exists**, tell the user plainly and stop. Suggest running `/wrap-up` at the end of today's session so tomorrow's start works.
+- **If no journal exists**, tell the user plainly and stop. Suggest running `/wrap-up` at the end of today's session so tomorrow's start works. First re-check that `${JOURNAL_DIR}` was built from `${REPO_PATH}` and not from `${WORKTREE_PATH}` — "no journals yet" reported from inside a fresh worktree is the one false negative this command has, and it looks exactly like a repo nobody has journaled.
 - **Never run `git push`, `gh`, or any send/post command.**
 - After the `AskUserQuestion`, even on "Proceed," confirm the first concrete action before editing files — match the scope of actions to what the user explicitly approves.
 
