@@ -167,7 +167,17 @@ PATTERNS=(
   # -- gh: the case that prompted widening upstream's list ----------------
   'gh[[:space:]]+repo[[:space:]]+(delete|archive|rename)@@Deletes, archives or renames a GitHub repo. The user does this themselves.'
   'gh[[:space:]]+(secret|release|run)[[:space:]]+delete@@Deletes a GitHub secret, release or run.'
-  'gh[[:space:]]+api.*(-X|--method|--input|(^|[[:space:]])(-f|-F)[[:space:]]|--field|--raw-field)@@`gh api` with a write flag can delete a repo. Read-only `gh api` is fine.'
+  # `gh api` is the only route to things `gh` has no subcommand for (milestones,
+  # labels in bulk), so refusing every write flag refused ordinary work and sent
+  # it to the web UI for two months. Only the shapes that cannot be undone or
+  # cannot be read from the command line are refused here: the DELETE method, a
+  # GraphQL call with a body (a mutation travels by POST, so the method does not
+  # give it away) and a body read from a file. Every other write is asked, not
+  # refused -- see ASK_PATTERNS. The refusal loop runs first, so a DELETE that
+  # also matches the ask rule still gets the stricter answer.
+  'gh[[:space:]]+api.*(-X|--method)[[:space:]=]*[Dd][Ee][Ll][Ee][Tt][Ee]@@`gh api` with the DELETE method can delete a repo, and nothing undoes that. The user does this themselves.'
+  'gh[[:space:]]+api[[:space:]]+graphql.*((^|[[:space:]])(-f|-F)[[:space:]]|--field|--raw-field|--input)@@`gh api graphql` with a body may carry a mutation such as deleteRepository, and the method does not say so. Use the REST endpoint for the same change instead.'
+  'gh[[:space:]]+api.*--input@@`gh api --input` sends a body from a file, which this hook cannot read. Pass the fields on the command line with -f or -F instead; that form is asked rather than refused.'
 
   # -- filesystem: absolute paths and $HOME only, so repo-local cleanup works
   'rm[[:space:]]+(-[a-zA-Z]*[rR][a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*[rR])[a-zA-Z]*[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/|~|\$HOME)@@Recursive force-delete of an absolute path. Relative paths inside the repo are fine.'
@@ -193,8 +203,16 @@ PATTERNS=(
 # against. A prompt puts the judgement where it belongs, and keeps the case this
 # is really guarding against (a branch whose work exists nowhere else) in front
 # of a human rather than silently allowed.
+#
+# `gh api` writes are the second case. The first version refused every write
+# flag because the case that prompted it was deleting a repo, and that also
+# refused creating or editing a milestone, which `gh` cannot do any other way.
+# A POST, PATCH or PUT is a write but a reversible one, and the prompt shows the
+# path and the method, so a human can tell `repos/x/y/milestones/8` from
+# `repos/x/y`. The irreversible shapes stay in PATTERNS above.
 ASK_PATTERNS=(
   'git[[:space:]]+branch[[:space:]]+-D@@Force-deletes a branch and any unmerged commits on it. `-d` is the safe form, but it also refuses branches whose work landed by squash merge or rebase, so `-D` is sometimes the only way through. Check that the work exists somewhere else first.'
+  'gh[[:space:]]+api.*(-X|--method|(^|[[:space:]])(-f|-F)[[:space:]]|--field|--raw-field)@@`gh api` with a write flag creates or changes something on GitHub (a milestone, a label, a repo setting). DELETE, GraphQL bodies and --input are refused outright; this one is reversible but still a write, so read the path and the method before saying yes.'
 )
 
 # Claude Code reads a PreToolUse permission decision as JSON on stdout. Exit 2
