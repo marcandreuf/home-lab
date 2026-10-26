@@ -136,6 +136,33 @@ Authenticating stays a human step (`glab auth login` is interactive, and takes `
 
 Fix the bus **before** authenticating — see [Troubleshooting](#troubleshooting) and [`vnc-xstartup`](#vnc-xstartup). On the wrong bus `glab` does not error, it hangs, and it ignores `SIGTERM`, so it takes `kill -9`. The check knows this and skips the auth probe rather than hanging with it.
 
+### `unlock-keyring.sh`
+
+Makes the GNOME keyring actually unlockable on this VNC box, which is the step `install-glab.sh` assumes and nothing performs. Reaching the Secret Service is not enough: the collection also has to be *unlocked*, and on a session with no full desktop the unlock silently never happens.
+
+```sh
+./scripts/unlock-keyring.sh            # fix the session, report, exit
+./scripts/unlock-keyring.sh --seahorse # fix, then open Seahorse to unlock
+./scripts/unlock-keyring.sh --check    # report only, change nothing
+```
+
+**Why the unlock silently never happens.** `gnome-keyring-daemon` runs with `--components=pkcs11,secrets` and has no password window of its own. That window is a separate binary, `/usr/libexec/gcr-prompter`, which D-Bus starts on demand. D-Bus starts it with *its* activation environment, and on a hand-started VNC session that environment has no `DISPLAY`. So the prompter is born with nowhere to draw, dies at once, and whoever asked for the unlock waits for a window that never comes. It is the same root cause as the `gnome-terminal-server` failure in [Troubleshooting](#troubleshooting), reached from a different direction.
+
+It fails silently in three different disguises, and none of them names the display:
+
+- Seahorse opens, and the Unlock button does nothing or hangs.
+- `glab` returns `failed to unlock correct collection '/org/freedesktop/secrets/collection/login'`.
+- Anything else on libsecret hangs or fails the same way.
+
+**Running `gcr-prompter` by hand does not fix it.** It exits when idle, by design, because it is meant to be D-Bus activated. The fix is to give D-Bus the `DISPLAY` so it can start the prompter itself, which is what the script does and then proves by asking D-Bus to start it and pinging it.
+
+**Two traps worth knowing**, both of which cost time here:
+
+- `pgrep gnome-keyring-daemon` never matches. The kernel truncates the process name to 15 characters, so the 21-character pattern cannot hit. Use `pgrep -af gnome-keyring`, or you will conclude the daemon is dead while it is serving requests.
+- `dbus-update-activation-environment` prints nothing on success, so it is easy to think it failed and go hunting for a second cause. Verify with `systemctl --user show-environment | grep DISPLAY`, not with a `GetEnvironment` call over the session bus, which does not answer here and reads as an empty environment.
+
+It lasts as long as the session bus. [`vnc-xstartup`](#vnc-xstartup) already carries the `dbus-update-activation-environment --systemd DISPLAY XAUTHORITY` line that makes it permanent, so **needing this script is itself a finding**: it means the running VNC session never executed that line, either because it predates the file or because the stock `xstartup` is still installed on that machine.
+
 ## Home lab admin
 
 ### `connect-vnc.sh`
