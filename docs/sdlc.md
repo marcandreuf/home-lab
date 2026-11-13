@@ -190,12 +190,14 @@ The journal stream is the exception that has to be stated, because `git rev-pars
 
 A VM is disposable. Rebuilding one should cost a `git clone` and little else, so the machine-specific wiring a project needs is committed rather than left to accumulate in `~/.claude`. Because a session is scoped to exactly one repo (see above), that repo is the only place the wiring can live and still be found.
 
-**Every repo commits two files:**
+**Every private repo commits two files:**
 
 - `.claude/settings.json` — the shared, curated permission allowlist, so a rebuilt VM does not spend its first day re-approving the same commands.
 - `.mcp.json` — the repo's MCP servers. Claude Code otherwise keeps these in `~/.claude.json` keyed by absolute path, which is machine-local and dies with the VM.
 
 Both are reviewable at a glance and contain no prose, which is what makes them safe to commit without a standing audit obligation.
+
+**A public repo commits neither, and ignores all of `.claude/`.** The allowlist is what rules this out: its rules get generalised from whatever was approved in the moment, so they carry machine paths and infrastructure identifiers — an SSH host, a Proxmox address, a ZeroTier network id — into a tree anyone can read. Keeping one publishable would mean reviewing it on every change, which is the standing audit obligation the two files above were chosen *not* to incur. The cost is accepted rather than mitigated: a rebuilt VM re-approves commands for a while. What cushions it is that the generic rules were never repo-specific anyway — they belong in `~/.claude/settings.json`, which applies on every machine and is not published. This repo is the case in point; the reasoning is restated at the top of its [`.gitignore`](../.gitignore).
 
 **Journals are never committed, in any repo.** `.gitignore` keeps `.claude/journals/` out everywhere. The reasoning is not that journals are more secret than the code beside them — in a private repo holding deploy workflows and infrastructure scripts, they usually are not. It is that journals are *prose*, and a credential written in prose reads as "password `hunter2`" rather than `KEY=value`, so the scans that catch a secret in code slide straight past one in a journal. Committing them would mean a permanent review obligation on every session's output, with a failure mode — a literal in git history — that is expensive to undo. The trade is deliberate, and it has a second half: journals lose `git clone` recovery and get no backup in its place. They are local-only and disposable — losing the machine loses them, which is accepted rather than mitigated. Anything worth surviving the machine gets promoted to a commit, a doc or an issue while the session is still running; a journal is a handover to tomorrow-you, not an archive.
 
