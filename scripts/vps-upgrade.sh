@@ -127,6 +127,7 @@ while (($#)); do
   shift
 done
 [[ -n $HOST ]] || { usage; exit 1; }
+[[ $HOST != . && $HOST != .. ]] || die "'$HOST' is not a host name"
 
 STATE_DIR="$STATE_ROOT/${HOST//[^A-Za-z0-9._-]/_}"
 SAVED_LIST="$STATE_DIR/containers.txt"
@@ -387,6 +388,8 @@ do_run() {
 
   say "starting the upgrade on $HOST (unit $UNIT)"
   LAUNCH_EPOCH=$(launch_stage) || die "could not start the upgrade unit on $HOST"
+  # It is spliced into a later remote command, so accept nothing but digits.
+  [[ $LAUNCH_EPOCH =~ ^[0-9]+$ ]] || { say "unexpected launch output from $HOST; the log will cover the whole boot"; LAUNCH_EPOCH=0; }
   wait_for_stage
   case $STAGE_RESULT in
     rebooted) fetch_log -1 ;;
