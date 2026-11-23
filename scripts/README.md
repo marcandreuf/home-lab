@@ -235,6 +235,26 @@ sudo ./scripts/zerotier-reset-identity.sh <NETWORK_ID>
 
 Needs root. The node gets a **new ID**, so it has to be re-authorized in the ZeroTier controller before it can reach the network again.
 
+### `vps-upgrade.sh`
+
+Upgrades a VPS that runs its websites in Docker, from this machine over SSH: stops the containers, runs `apt-get update` and `upgrade`, reboots onto the new kernel, starts the same containers again and requests every site over HTTPS. Nothing is installed on the VPS. With no mode it only reports, so the first command against a new host is always safe.
+
+```sh
+./scripts/vps-upgrade.sh my-vps                  # report: kernel, pending packages, what would be stopped
+./scripts/vps-upgrade.sh my-vps --run            # do it, after a confirmation prompt
+./scripts/vps-upgrade.sh my-vps --run --no-reboot
+./scripts/vps-upgrade.sh my-vps --start          # recovery: bring the containers back
+./scripts/vps-upgrade.sh my-vps --run --exclude some-db --proxy caddy
+```
+
+`my-vps` is an alias in `~/.ssh/config`. That is where the address, port, user and key belong, so none of them is ever typed into a command or committed here. The script header has an example entry.
+
+It exists for one trap. A container with `restart: unless-stopped` treats `docker stop` as deliberate, so after the reboot it **stays down**. The script records what was running (locally, in `~/.local/state/vps-upgrade/<host>/`) and starts exactly that again: the edge proxy first, then the rest. The proxy is whichever container publishes host port 80 or 443, so Traefik, Caddy or nginx are all found without configuration; `--proxy` overrides that.
+
+The upgrade itself runs on the host as the transient systemd unit `vps-upgrade`, so a dropped SSH connection or a sleeping laptop cannot interrupt dpkg. If apt fails, the host is not rebooted and the containers are started again. If the script dies after stopping them, the host finishes on its own and `--start` recovers. The apt log is copied back next to the saved list.
+
+The host needs apt, systemd, Docker and passwordless `sudo` for the SSH user. The site check reads Traefik `Host()` router rules; on other proxies it is skipped.
+
 ## Troubleshooting
 
 ### `morning-terminals.sh` opens no windows, then `could not focus the Claude Code window`

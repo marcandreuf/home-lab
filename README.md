@@ -38,6 +38,7 @@ Full descriptions in [scripts/README.md](scripts/README.md).
 | `wol-proxmox.sh` | Sends a Wake-on-LAN packet to the Proxmox host |
 | `restart-program.sh` | Kills a program by name and relaunches it |
 | `zerotier-reset-identity.sh` | Regenerates a ZeroTier node identity and rejoins a network |
+| `vps-upgrade.sh` | Upgrades a Docker VPS over SSH: stops the containers, apt upgrade, reboot, starts the same containers and checks the sites |
 
 ## Claude Code
 
